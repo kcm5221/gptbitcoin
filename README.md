@@ -1,6 +1,6 @@
 # gptbitcoin Trading Bot
 
-자동화된 비트코인 스팟 매매 봇입니다. Upbit 현물 마켓을 대상으로 4시간봉 OHLCV 데이터를 기반으로 SMA, ATR, MACD 지표 및 Fear & Greed 지수를 활용하며, 수수료·세금·로그 로테이션·AI 리플렉션 기능을 포함합니다.
+자동화된 비트코인 매매 봇입니다. Upbit 현물 마켓을 대상으로 4시간봉 OHLCV 데이터를 기반으로 SMA, ATR, MACD 지표 및 Fear & Greed 지수를 활용하며, 수수료·로그 로테이션·AI 리플렉션 기능을 포함합니다.
 
 ## 주요 기능
 
