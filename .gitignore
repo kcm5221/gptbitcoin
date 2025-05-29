@@ -5,6 +5,9 @@ venv/
 .env
 .env.*
 
+# 예외: sample 파일은 버전 관리
+!.env.sample
+
 # ── 런타임 파일
 trading.db
 ohlcv_cache.json
