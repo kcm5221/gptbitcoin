@@ -303,19 +303,18 @@ def safe_ohlcv() -> Optional[pd.DataFrame]:
 def sync_account_upbit() -> Account:
     try:
         bal = UPBIT.get_balances()
+        
         if isinstance(bal, dict) and "error" in bal:
             raise RuntimeError(bal["error"]["message"])
         def _get_balance(cur: str, f: str = "balance") -> float:
-             """잔고 딕셔너리에서 currency == cur 인 값의 필드 f 를 float 로 반환"""
-             raw = next((b.get(f, "0") for b in bal if b["currency"] == cur), "0")
-             return float(raw or 0)
-        
+            """잔고 딕셔너리에서 currency == cur 인 값의 필드 f 를 float 로 반환"""
+            raw = next((b.get(f, "0") for b in bal if b["currency"] == cur), "0")
+            return float(raw or 0)
         return Account(
             _get_balance("KRW"),
             _get_balance("BTC"),
             _get_balance("BTC", "avg_buy_price"),
         )
-    
     except Exception as e:
         logger.warning("balance sync error – %s", e)
         return Account(0, 0, 0)
