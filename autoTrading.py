@@ -67,6 +67,7 @@ UPBIT = pyupbit.Upbit(ACCESS, SECRET) if LIVE_MODE else None
 
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK_URL")
 
+
 # ──────────────────────────────────────────────────────────────
 # Discord Notify
 # ──────────────────────────────────────────────────────────────
@@ -77,6 +78,7 @@ def notify_discord(content: str) -> None:
         requests.post(DISCORD_WEBHOOK, json={"content": content}, timeout=5)
     except Exception as e:
         logger.warning("Discord notify failed – %s", e)
+
 
 # ───────── 로그: 3MB 회전 ─────────
 LOG_DIR = PROJECT_ROOT / "logs"
@@ -132,6 +134,7 @@ def get_fear_and_greed() -> Optional[int]:
     except Exception as e:
         logger.warning("FG fetch fail – %s", e)
         return FNG_CACHE["value"]
+
 
 # ──────────────────────────────────────────────────────────────
 # DB Helper
@@ -302,11 +305,17 @@ def sync_account_upbit() -> Account:
         bal = UPBIT.get_balances()
         if isinstance(bal, dict) and "error" in bal:
             raise RuntimeError(bal["error"]["message"])
-        g = lambda cur, f="balance": float(
-            next((b.get(f, "0") for b in bal if b["currency"] == cur),
-                 "0") or 0
+        def _get_balance(cur: str, f: str = "balance") -> float:
+             """잔고 딕셔너리에서 currency == cur 인 값의 필드 f 를 float 로 반환"""
+             raw = next((b.get(f, "0") for b in bal if b["currency"] == cur), "0")
+             return float(raw or 0)
+        
+        return Account(
+            _get_balance("KRW"),
+            _get_balance("BTC"),
+            _get_balance("BTC", "avg_buy_price"),
         )
-        return Account(g("KRW"), g("BTC"), g("BTC", "avg_buy_price"))
+    
     except Exception as e:
         logger.warning("balance sync error – %s", e)
         return Account(0, 0, 0)
