@@ -6,12 +6,14 @@ LIVE / VIRTUAL 자동매매
 - 3 MB 로그 로테이션
 - get_balances 잔고 동기화 + Remaining-Req 우회
 - OHLCV 캐시 · REST 백업, SMA/ATR/MACD, Fear-Greed(일일 캐시)
-- 가격 기반 익절(+5 %) / 손절(–6 %) 우선 매도
+- 가격 기반 익절(+5%) / 손절(–6%) 우선 매도
 - 동적 Risk, 먼지 간주(5 000원 미만), 최소주문 5 000원
+- 인트라데이 분할 진입·청산 (PLAY_RATIO, ENTRY_PARTS, EXIT_PARTS)
 - GPT-4o reflection 저장
 - 에러 발생 시 Discord 알림
 """
 
+import argparse
 from __future__ import annotations
 
 import json
@@ -44,13 +46,30 @@ def _ignore_remaining_req(headers: Any) -> tuple[int, int, int]:
 _rq._parse = _ignore_remaining_req  # noqa: E402
 
 # ──────────────────────────────────────────────────────────────
-# 환경
+# argparse: 모드 분기 처리
+# ──────────────────────────────────────────────────────────────
+parser = argparse.ArgumentParser(description="Auto trading bot")
+parser.add_argument(
+    "--mode",
+    choices=["4h", "intraday"],
+    default="4h",
+    help="Trading mode: '4h' for 4-hour candles, 'intraday' for 15-minute candles (10:00-14:00 KST)"
+)
+args = parser.parse_args()
+
+# 모드에 따라 INTERVAL(차트 간격)을 결정
+if args.mode == "intraday":
+    INTERVAL = "minute15"
+else:
+    INTERVAL = "minute240"
+
+# ──────────────────────────────────────────────────────────────
+# 환경 로드
 # ──────────────────────────────────────────────────────────────
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent
 load_dotenv(PROJECT_ROOT / ".env")
 
 TICKER = "KRW-BTC"
-INTERVAL = "minute240"
 CACHE_TTL = 3600
 DB_FILE = "trading.db"
 CACHE_FILE = "ohlcv_cache.json"
@@ -60,16 +79,14 @@ ACCESS = os.getenv("UPBIT_ACCESS_KEY", "").strip()
 SECRET = os.getenv("UPBIT_SECRET_KEY", "").strip()
 LIVE_MODE = (
     os.getenv("LIVE_MODE", "false").lower() == "true"
-    and ACCESS
-    and SECRET
+    and (ACCESS != "") and (SECRET != "")
 )
 UPBIT = pyupbit.Upbit(ACCESS, SECRET) if LIVE_MODE else None
 
-DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK_URL")
-
+DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK_URL", "")
 
 # ──────────────────────────────────────────────────────────────
-# Discord Notify
+# Discord 알림 함수
 # ──────────────────────────────────────────────────────────────
 def notify_discord(content: str) -> None:
     if not DISCORD_WEBHOOK:
@@ -78,7 +95,6 @@ def notify_discord(content: str) -> None:
         requests.post(DISCORD_WEBHOOK, json={"content": content}, timeout=5)
     except Exception as e:
         logger.warning("Discord notify failed – %s", e)
-
 
 # ───────── 로그: 3MB 회전 ─────────
 LOG_DIR = PROJECT_ROOT / "logs"
@@ -95,10 +111,10 @@ logging.basicConfig(
     handlers=[handler, logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
-logger.info("MODE: %s", "LIVE" if LIVE_MODE else "VIRTUAL")
+logger.info("MODE: %s | INTERVAL: %s", "LIVE" if LIVE_MODE else "VIRTUAL", INTERVAL)
 
 # ──────────────────────────────────────────────────────────────
-# 전략 파라미터
+# 전략 파라미터 기본값
 # ──────────────────────────────────────────────────────────────
 param_file = PROJECT_ROOT / "optimize" / "best_params.json"
 if param_file.exists():
@@ -115,7 +131,7 @@ FG_SELL_TH = 70
 BASE_RISK = 0.02
 
 # ──────────────────────────────────────────────────────────────
-# FNG 일일 캐시
+# FNG(공포·탐욕) 지수 일일 캐시
 # ──────────────────────────────────────────────────────────────
 FNG_CACHE: dict[str, Any] = {"ts": 0, "value": None}
 
@@ -134,7 +150,6 @@ def get_fear_and_greed() -> Optional[int]:
     except Exception as e:
         logger.warning("FG fetch fail – %s", e)
         return FNG_CACHE["value"]
-
 
 # ──────────────────────────────────────────────────────────────
 # DB Helper
@@ -229,9 +244,8 @@ def get_recent_trades(limit: int = 20) -> pd.DataFrame:
         cols = [c[0] for c in cur.description]
     return pd.DataFrame(rows, columns=cols)
 
-
 # ──────────────────────────────────────────────────────────────
-# OHLCV & 지표
+# OHLCV(차트) & 지표 계산
 # ──────────────────────────────────────────────────────────────
 def load_cached_ohlcv() -> Optional[pd.DataFrame]:
     if not os.path.exists(CACHE_FILE):
@@ -290,41 +304,39 @@ def safe_ohlcv() -> Optional[pd.DataFrame]:
     try:
         df = pyupbit.get_ohlcv(TICKER, count=100, interval=INTERVAL)
     except Exception as e:
-        logger.warning("pyupbit error %s", e)
+        logger.warning("pyupbit error – %s", e)
         df = None
     if df is not None and not df.empty:
         return df
     return fetch_direct()
 
-
 # ──────────────────────────────────────────────────────────────
-# 잔고 동기화
+# Upbit 잔고 동기화 (실거래 시)
 # ──────────────────────────────────────────────────────────────
 def sync_account_upbit() -> Account:
     try:
         bal = UPBIT.get_balances()
-
         if isinstance(bal, dict) and "error" in bal:
             raise RuntimeError(bal["error"]["message"])
 
         def _get_balance(cur: str, f: str = "balance") -> float:
-            """잔고 딕셔너리에서 currency == cur 인 값의 필드 f 를 float 로 반환"""
             raw = next((b.get(f, "0") for b in bal if b["currency"] == cur), "0")
             return float(raw or 0)
+
         return Account(
             _get_balance("KRW"),
             _get_balance("BTC"),
             _get_balance("BTC", "avg_buy_price"),
         )
+
     except Exception as e:
         logger.warning("balance sync error – %s", e)
         return Account(0, 0, 0)
 
-
 # ──────────────────────────────────────────────────────────────
-# GPT-4o reflection
+# GPT-4o 반성 기능
 # ──────────────────────────────────────────────────────────────
-OPENAI_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_KEY = os.getenv("OPENAI_API_KEY", "")
 client = OpenAI(api_key=OPENAI_KEY) if OPENAI_KEY else None
 
 
@@ -348,15 +360,15 @@ def ask_ai_reflection(df: pd.DataFrame, fear_idx: int) -> Optional[str]:
         logger.warning("OpenAI reflection error – %s", e)
         return None
 
-
 # ──────────────────────────────────────────────────────────────
-# 메인
+# 메인 로직
 # ──────────────────────────────────────────────────────────────
 def ai_trading() -> None:
     try:
         init_db()
         acc = sync_account_upbit() if LIVE_MODE else load_account()
 
+        # 1) 차트 데이터 가져오기 (캐시 또는 REST)
         df = load_cached_ohlcv()
         if df is None or df.empty:
             df = safe_ohlcv()
@@ -367,8 +379,14 @@ def ai_trading() -> None:
         save_cached_ohlcv(df)
         df = calc_indicators(df)
         last = df.iloc[-1]
-        ts_end = last.name.floor("4h")
 
+        # 2) 캔들 처리 기준 ts_end 계산 (모드별 분기)
+        if args.mode == "intraday":
+            ts_end = last.name.floor("15min")
+        else:
+            ts_end = last.name.floor("4h")
+
+        # 이미 같은 ts_end로 처리된 적이 있으면 스킵
         if sqlite3.connect(DB_FILE).execute(
             "SELECT 1 FROM indicator_log WHERE ts>=?",
             (ts_end.timestamp(),),
@@ -376,16 +394,17 @@ def ai_trading() -> None:
             logger.info("Candle %s already processed", ts_end)
             return
 
+        # 3) 지표·가격·FG 지수 계산
         fear = get_fear_and_greed() or 0
         price = float(last["close"])
         macd = float(last["macd_diff"])
 
-        # 먼지 간주
+        # 먼지(5천원 미만) 간주
         if acc.btc * price < MIN_ORDER_KRW:
             acc.btc = 0
             acc.avg_price = 0
 
-        # 매수·매도 판단
+        # 매수·매도판단
         buy = price > last.sma and fear < FG_BUY_TH
         stop_loss = acc.btc > 0 and price <= acc.avg_price * 0.94
         FEE = 0.0005
@@ -397,8 +416,7 @@ def ai_trading() -> None:
         if buy:
             decision, pct, reason = "buy", BUY_PCT * 100, "Price>SMA & FG<40"
         elif sell:
-            decision, pct = "sell", 100.0
-            reason = (
+            decision, pct, reason = "sell", 100.0, (
                 "Stop-loss −6%" if stop_loss else
                 "Take-profit +5%" if take_profit else
                 "FG>=70 & MACD<0"
@@ -406,9 +424,11 @@ def ai_trading() -> None:
         else:
             decision, pct, reason = "hold", 0, "No signal"
 
+        # 비중 버전: 자금이 부족하면 100%로 변환
         if buy and acc.krw < MIN_ORDER_KRW * 2:
             pct = 100.0
 
+        # 4) 과거 20개 트레이드로 승률 계산 → 동적 리스크 캡
         rows = sqlite3.connect(DB_FILE).execute(
             "SELECT decision,percentage FROM trade_log "
             "ORDER BY id DESC LIMIT 20"
@@ -424,38 +444,79 @@ def ai_trading() -> None:
         if decision == "buy":
             pct = min(pct, dyn_cap * 100)
 
+        # 5) 주문 실행: 모드별 분기 처리
         krw, btc, avg = acc.krw, acc.btc, acc.avg_price
         executed = False
 
-        if decision == "buy" and pct > 0:
-            amt = krw * pct / 100
-            if not (LIVE_MODE and amt < MIN_ORDER_KRW):
-                executed = True
-                if LIVE_MODE:
-                    UPBIT.buy_market_order(TICKER, amt)
-                else:
-                    qty = amt / price
-                    krw -= amt
-                    btc += qty
-                    avg = (avg * acc.btc + amt) / btc if btc else price
+        if args.mode == "intraday":
+            # 인트라데이 분할 진입·청산
+            total_equity = acc.krw + acc.btc * price
+            play_money = float(os.getenv("PLAY_RATIO", 0.4)) * total_equity
+            current_exposure = acc.btc * price
+            available_play = play_money - current_exposure
 
-        elif decision == "sell" and btc > 0:
-            qty = btc * pct / 100
-            value = qty * price
-            if not (LIVE_MODE and value < MIN_ORDER_KRW):
-                executed = True
-                if LIVE_MODE:
-                    UPBIT.sell_market_order(TICKER, qty)
-                else:
-                    krw += value
-                    btc -= qty
+            if decision == "buy" and pct > 0:
+                ENTRY_PARTS = int(os.getenv("ENTRY_PARTS", 3))
+                part_pct = (pct / ENTRY_PARTS) / 100
+                intended_amt = krw * part_pct
+                amt = min(intended_amt, available_play)
+                if amt >= MIN_ORDER_KRW:
+                    executed = True
+                    if LIVE_MODE:
+                        UPBIT.buy_market_order(TICKER, amt)
+                    else:
+                        qty = amt / price
+                        krw -= amt
+                        btc += qty
+                        avg = (avg * acc.btc + amt) / btc if btc else price
 
+            elif decision == "sell" and btc > 0:
+                EXIT_PARTS = int(os.getenv("EXIT_PARTS", 3))
+                part_pct = (pct / EXIT_PARTS) / 100
+                qty = btc * part_pct
+                value = qty * price
+                if value >= MIN_ORDER_KRW:
+                    executed = True
+                    if LIVE_MODE:
+                        UPBIT.sell_market_order(TICKER, qty)
+                    else:
+                        krw += value
+                        btc -= qty
+
+        else:
+            # 4시간봉 모드: 기존 한 번에 비중 매수/매도
+            if decision == "buy" and pct > 0:
+                amt = krw * pct / 100
+                if not (LIVE_MODE and amt < MIN_ORDER_KRW):
+                    executed = True
+                    if LIVE_MODE:
+                        UPBIT.buy_market_order(TICKER, amt)
+                    else:
+                        qty = amt / price
+                        krw -= amt
+                        btc += qty
+                        avg = (avg * acc.btc + amt) / btc if btc else price
+
+            elif decision == "sell" and btc > 0:
+                qty = btc * pct / 100
+                value = qty * price
+                if not (LIVE_MODE and value < MIN_ORDER_KRW):
+                    executed = True
+                    if LIVE_MODE:
+                        UPBIT.sell_market_order(TICKER, qty)
+                    else:
+                        krw += value
+                        btc -= qty
+
+        # 6) LIVE 모드라면 주문 직후 잔고 재동기화
         if LIVE_MODE and executed:
             acc = sync_account_upbit()
             krw, btc, avg = acc.krw, acc.btc, acc.avg_price
 
+        # 7) AI 반성(옵션)
         reflection = ask_ai_reflection(get_recent_trades(20), fear) or ""
 
+        # 8) DB에 계좌 및 로그 저장
         save_account(Account(krw, btc, avg))
         ts = time.time()
         log_indicator({
@@ -473,6 +534,7 @@ def ai_trading() -> None:
             "reflection": reflection
         })
 
+        # 9) 최종 실행 결과 로그 및 Discord 알림
         logger.info(
             "Executed=%s pct=%.2f mode=%s",
             executed, pct, "live" if LIVE_MODE else "virtual"
@@ -480,6 +542,7 @@ def ai_trading() -> None:
 
         msg = (
             f"� 자동매매 결과: **{decision.upper()}**\n"
+            f"- 모드: {args.mode.upper()}\n"
             f"- 비중: {pct:.2f}%\n"
             f"- 가격: {price:.0f} KRW\n"
             f"- KRW 잔고: {krw:.0f}\n"
