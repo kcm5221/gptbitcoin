@@ -30,18 +30,25 @@ LIVE_MODE     = (os.getenv("LIVE_MODE", "false").lower() == "true"
 
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK_URL", "").strip()
 
+# ──────────────────────────────────────────────────────────────
 # 워뇨띠 전략용 파라미터
-PLAY_RATIO    = float(os.getenv("PLAY_RATIO", "0.05"))   # 예: 0.05 → 잔고의 5%만 사용
-RESERVE_RATIO = float(os.getenv("RESERVE_RATIO", "0.10")) # 예: 0.10 → 잔고의 10%는 꼭 남김
+# ──────────────────────────────────────────────────────────────
+PLAY_RATIO    = float(os.getenv("PLAY_RATIO", "0.05"))   # 잔고의 5%만 사용
+RESERVE_RATIO = float(os.getenv("RESERVE_RATIO", "0.10")) # 잔고의 10%는 남김
 
 # “Fear & Greed” 지수 캐시 유효기간 (초)
 FG_CACHE_TTL = int(os.getenv("FG_CACHE_TTL", "82800"))  # 기본 23시간
 
 # 전략 파라미터
-SMA_WIN   = int(os.getenv("SMA_WIN", "30"))
-ATR_WIN   = int(os.getenv("ATR_WIN", "14"))
-BUY_PCT   = float(os.getenv("BUY_PCT", "1.0"))   # 현재 전체 진입 시 100%
-SELL_PCT  = float(os.getenv("SELL_PCT", "0.50"))
-FG_BUY_TH = int(os.getenv("FG_BUY_TH", "40"))
-FG_SELL_TH= int(os.getenv("FG_SELL_TH", "70"))
-BASE_RISK = float(os.getenv("BASE_RISK", "0.02"))
+SMA_WIN    = int(os.getenv("SMA_WIN", "30"))
+ATR_WIN    = int(os.getenv("ATR_WIN", "14"))
+BUY_PCT    = float(os.getenv("BUY_PCT", "1.0"))   # 전체 진입 시 100%
+SELL_PCT   = float(os.getenv("SELL_PCT", "0.50"))
+FG_BUY_TH  = int(os.getenv("FG_BUY_TH", "40"))
+FG_SELL_TH = int(os.getenv("FG_SELL_TH", "70"))
+BASE_RISK  = float(os.getenv("BASE_RISK", "0.02"))
+
+# ──────────────────────────────────────────────────────────────
+# 볼륨 스파이크 임계치 (AI 제안 반영)
+# ──────────────────────────────────────────────────────────────
+VOLUME_THRESHOLD = float(os.getenv("VOLUME_THRESHOLD", "2.0"))

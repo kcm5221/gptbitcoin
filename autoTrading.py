@@ -25,7 +25,8 @@ load_dotenv()  # .env 파일에서 환경 변수 로드
 
 from config import (
     LIVE_MODE, TICKER, DB_FILE, MIN_ORDER_KRW,
-    PLAY_RATIO, RESERVE_RATIO, FG_BUY_TH, FG_SELL_TH
+    PLAY_RATIO, RESERVE_RATIO, FG_BUY_TH, FG_SELL_TH,
+    VOLUME_THRESHOLD
 )
 from utils import (
     init_db, load_account, save_account,
@@ -113,7 +114,7 @@ def ai_trading() -> None:
             avg_price = 0.0
 
         # 4) 거래량·캔들 패턴 기반 매수/매도 신호
-        vs   = is_volume_spike(volume, vol20, threshold=2.0)
+        vs   = is_volume_spike(volume, vol20, threshold=VOLUME_THRESHOLD)
         ham  = is_hammer(last)
         invh = is_inverted_hammer(last)
         doj  = is_doji(last, tolerance=0.001)
@@ -122,9 +123,9 @@ def ai_trading() -> None:
         stop_loss  = (btc > 0) and (price <= avg_price * 0.94)
         fee        = 0.0005
         target     = avg_price * ((1 + fee) * 1.05 / (1 - fee))  # 익절 목표가
-        take_profit= (btc > 0) and (price >= target)
+        take_profit = (btc > 0) and (price >= target)
         trend_sell = (btc > 0) and (fear_idx >= FG_SELL_TH) and (macd < 0)
-        sell_signal= stop_loss or take_profit or trend_sell
+        sell_signal = stop_loss or take_profit or trend_sell
 
         if buy_signal:
             decision, reason = "buy", "volume spike + candle pattern"
@@ -206,7 +207,7 @@ def ai_trading() -> None:
 
         # 10) Discord 알림
         msg = (
-            f"� 자동매매 결과: **{decision.upper()}**\n"
+            f"자동매매 결과: **{decision.upper()}**\n"
             f"- 비중: {pct:.2f}%\n"
             f"- 가격: {price:.0f} KRW\n"
             f"- KRW 잔고: {krw:.0f} KRW\n"
@@ -216,7 +217,7 @@ def ai_trading() -> None:
 
     except Exception as e:
         logger.error("ai_trading() 예외: %s", e, exc_info=True)
-        notify_discord(f"❌ 자동매매 중 예외 발생: `{e}`")
+        notify_discord(f"자동매매 중 예외 발생: `{e}`")
 
 # ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
@@ -226,4 +227,4 @@ if __name__ == "__main__":
         logger.info("사용자에 의해 중단됨 (Ctrl+C)")
     except Exception as e:
         logger.error("Unexpected error: %s", e, exc_info=True)
-        notify_discord(f"‼️ 자동매매 스크립트 장애: `{e}`")
+        notify_discord(f"‼자동매매 스크립트 장애: `{e}`")
