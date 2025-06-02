@@ -7,6 +7,8 @@ import argparse
 import logging
 import sqlite3
 import time
+
+import logging
 import pandas as pd
 import requests
 
