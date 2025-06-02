@@ -1,5 +1,3 @@
-# trading_bot/main.py
-
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
@@ -8,7 +6,6 @@ import logging
 import sqlite3
 import time
 
-import logging
 import pandas as pd
 import requests
 
@@ -84,7 +81,8 @@ def ai_trading():
         krw, btc, avg_price = sync_account_upbit()
     else:
         krw, btc, avg_price = load_account()
-    fear_idx = ask_ai_reflection(get_recent_trades(20), 0) or 0  # 예시
+    # 예시로 FNG 대신 빈값(0) 넣었습니다. 실제 원하시면 get_fear_and_greed() 호출로 바꾸세요.
+    fear_idx = ask_ai_reflection(get_recent_trades(20), 0) or 0
     equity = krw + btc * price
 
     ctx = SignalContext(
@@ -157,6 +155,9 @@ def ai_trading():
     # 13) 실제 매매 실행
     executed, pct_used = execute_trade(ctx, buy_sig, sell_sig, pattern)
     logger.info(f"12) execute_trade() 결과: executed={executed}, pct={pct_used:.2f}%")
+
+    # ── 디버그용 출력 ──
+    print(f"[DEBUG] log_and_notify 호출 직전 → executed={executed}, pct_used={pct_used}, pattern={pattern}")
 
     # 14) DB 기록 및 디스코드 알림
     log_and_notify(ctx, buy_sig, sell_sig, pattern, executed, pct_used)

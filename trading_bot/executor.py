@@ -118,4 +118,11 @@ def log_and_notify(ctx, buy_sig: bool, sell_sig: bool, pattern: str, executed: b
                 f"- BTC 잔고: {ctx.btc:.6f} BTC\n"
                 f"- 이유: {reason}\n"
             )
-        requests.post(DISCORD_WEBHOOK, json={"content": msg}, timeout=5)
+        #requests.post(DISCORD_WEBHOOK, json={"content": msg}, timeout=5)
+        try:
+            resp = requests.post(DISCORD_WEBHOOK, json={"content": msg}, timeout=5)
+            logger.info(f"Discord POST 상태코드: {resp.status_code}")
+            if resp.status_code not in (200, 204):
+                logger.error(f"Discord 응답 오류: {resp.text}")
+        except Exception as e:
+            logger.error(f"Discord 요청 중 예외: {e}")
