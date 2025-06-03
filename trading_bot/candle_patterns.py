@@ -1,111 +1,167 @@
-# trading_bot/candle_patterns.py
-
 import pandas as pd
+import logging
 
-def is_volume_spike(last_volume: float, avg_volume_20: float, threshold: float = 2.0) -> bool:
+from trading_bot.config import (
+    VOLUME_SPIKE_THRESHOLD,
+    DOJI_TOLERANCE,
+    DOUBLE_BOTTOM_REBOUND_PCT,
+    DOUBLE_TOP_DROP_PCT,
+    DOUBLE_PATTERN_LOOKBACK,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def is_volume_spike(last_volume: float, avg_volume_20: float) -> bool:
     """
-    최근 봉 거래량(last_volume)이 20봉 평균(avg_volume_20)의 threshold 배수 이상인지 판별.
+    마지막 봉 거래량(last_volume)이, 20봉 평균 거래량(avg_volume_20) × VOLUME_SPIKE_THRESHOLD 이상이면 True.
     """
     if avg_volume_20 is None or avg_volume_20 == 0:
         return False
-    return last_volume >= (avg_volume_20 * threshold)
+    try:
+        return last_volume >= (avg_volume_20 * VOLUME_SPIKE_THRESHOLD)
+    except Exception:
+        logger.exception("is_volume_spike: 계산 중 예외 발생")
+        return False
+
+
+def is_doji(candle: pd.Series) -> bool:
+    """
+    도지 검출: 실체 크기(body_size)가 전체 범위(total_range) 대비 DOJI_TOLERANCE 이하인지 판정.
+    """
+    if candle.isnull().any():
+        return False
+
+    try:
+        open_price = float(candle["open"])
+        close_price = float(candle["close"])
+        high_price = float(candle["high"])
+        low_price = float(candle["low"])
+
+        total_range = high_price - low_price
+        if total_range == 0:
+            return False
+
+        body_size = abs(close_price - open_price)
+        return (body_size / total_range) <= DOJI_TOLERANCE
+    except Exception:
+        logger.exception("is_doji: 계산 중 예외 발생")
+        return False
 
 
 def is_hammer(candle: pd.Series) -> bool:
     """
-    망치형(Hammer) 판별:
-    - 몸통(real_body) 대비 아래꼬리(lower_shadow)가 2배 이상 길고,
-    - 위꼬리(upper_shadow)가 몸통의 30% 이내
+    망치형 캔들 검출: 도지 제외, 하단 그림자(lower_shadow)가 실체(real_body) × 2 이상이고,
+    상단 그림자(upper_shadow)는 실체 × 0.3 이하일 때 True.
     """
-    open_price  = float(candle["open"])
-    close_price = float(candle["close"])
-    high_price  = float(candle["high"])
-    low_price   = float(candle["low"])
-
-    real_body    = abs(close_price - open_price)
-    lower_shadow = min(open_price, close_price) - low_price
-    upper_shadow = high_price - max(open_price, close_price)
-
-    if real_body == 0:
+    if candle.isnull().any():
+        return False
+    if is_doji(candle):
         return False
 
-    return (lower_shadow >= real_body * 2) and (upper_shadow <= real_body * 0.3)
+    try:
+        open_price = float(candle["open"])
+        close_price = float(candle["close"])
+        high_price = float(candle["high"])
+        low_price = float(candle["low"])
+
+        real_body = abs(close_price - open_price)
+        if real_body == 0:
+            return False
+
+        lower_shadow = min(open_price, close_price) - low_price
+        upper_shadow = high_price - max(open_price, close_price)
+
+        return (lower_shadow >= real_body * 2) and (upper_shadow <= real_body * 0.3)
+    except Exception:
+        logger.exception("is_hammer: 계산 중 예외 발생")
+        return False
 
 
 def is_inverted_hammer(candle: pd.Series) -> bool:
     """
-    역망치형(Inverted Hammer) 판별:
-    - 몸통(real_body) 대비 위꼬리(upper_shadow)가 2배 이상 길고,
-    - 아래꼬리(lower_shadow)가 몸통의 30% 이내
+    역망치형 검출: 도지 제외, 상단 그림자(upper_shadow)가 실체(real_body) × 2 이상이고,
+    하단 그림자(lower_shadow)는 실체 × 0.3 이하일 때 True.
     """
-    open_price  = float(candle["open"])
-    close_price = float(candle["close"])
-    high_price  = float(candle["high"])
-    low_price   = float(candle["low"])
-
-    real_body    = abs(close_price - open_price)
-    lower_shadow = min(open_price, close_price) - low_price
-    upper_shadow = high_price - max(open_price, close_price)
-
-    if real_body == 0:
+    if candle.isnull().any():
+        return False
+    if is_doji(candle):
         return False
 
-    return (upper_shadow >= real_body * 2) and (lower_shadow <= real_body * 0.3)
+    try:
+        open_price = float(candle["open"])
+        close_price = float(candle["close"])
+        high_price = float(candle["high"])
+        low_price = float(candle["low"])
 
+        real_body = abs(close_price - open_price)
+        if real_body == 0:
+            return False
 
-def is_doji(candle: pd.Series, tolerance: float = 0.001) -> bool:
-    """
-    도지(Doji) 판별:
-    - 시가와 종가 차이가 전체 캔들 범위 대비 tolerance 이하인 경우
-    """
-    open_price  = float(candle["open"])
-    close_price = float(candle["close"])
-    high_price  = float(candle["high"])
-    low_price   = float(candle["low"])
+        lower_shadow = min(open_price, close_price) - low_price
+        upper_shadow = high_price - max(open_price, close_price)
 
-    total_range = high_price - low_price
-    if total_range == 0:
+        return (upper_shadow >= real_body * 2) and (lower_shadow <= real_body * 0.3)
+    except Exception:
+        logger.exception("is_inverted_hammer: 계산 중 예외 발생")
         return False
-
-    body_size = abs(close_price - open_price)
-    return (body_size / total_range) <= tolerance
 
 
 def is_double_bottom(df_recent: pd.DataFrame) -> bool:
     """
-    최근 3봉을 보고 이중 바닥 패턴인지 판별.
-    - low1 > low2 < low3
-    - 봉2 종가(close2)가 저점(low2) 대비 1% 이상 반등
+    이중바닥 검출: 마지막 DOUBLE_PATTERN_LOOKBACK 봉 중
+    ‘저점–상승–저점’ 형태가 성립하고, 중간 봉 종가가 저점 대비 DOUBLE_BOTTOM_REBOUND_PCT 만큼 반등했을 때 True.
     """
-    if len(df_recent) < 3:
+    lookback = DOUBLE_PATTERN_LOOKBACK
+    if df_recent is None or df_recent.shape[0] < lookback:
         return False
 
-    low1, close1 = float(df_recent.iloc[-3]["low"]), float(df_recent.iloc[-3]["close"])
-    low2, close2 = float(df_recent.iloc[-2]["low"]), float(df_recent.iloc[-2]["close"])
-    low3, close3 = float(df_recent.iloc[-1]["low"]), float(df_recent.iloc[-1]["close"])
+    try:
+        sub = df_recent.iloc[-lookback:].reset_index(drop=True)
+        for i in range(0, lookback - 2):
+            low1 = float(sub.loc[i, "low"])
+            low2 = float(sub.loc[i + 1, "low"])
+            low3 = float(sub.loc[i + 2, "low"])
+            close2 = float(sub.loc[i + 1, "close"])
 
-    if not (low1 > low2 and low2 < low3):
+            # “저점–상승–저점” 형태
+            if not (low1 > low2 < low3):
+                continue
+            # “중간 봉 종가가 저점 대비 일정 비율만큼 반등”
+            if close2 < low2 * (1 + DOUBLE_BOTTOM_REBOUND_PCT):
+                continue
+            return True
         return False
-    if close2 <= low2 * 1.01:
+    except Exception:
+        logger.exception("is_double_bottom: 계산 중 예외 발생")
         return False
-    return True
 
 
 def is_double_top(df_recent: pd.DataFrame) -> bool:
     """
-    최근 3봉을 보고 이중 천장 패턴인지 판별.
-    - high1 < high2 > high3
-    - 봉2 종가(close2)가 고점(high2) 대비 1% 이상 하락
+    이중천장 검출: 마지막 DOUBLE_PATTERN_LOOKBACK 봉 중
+    ‘고점–하락–고점’ 형태가 성립하고, 중간 봉 종가가 고점 대비 DOUBLE_TOP_DROP_PCT 만큼 하락했을 때 True.
     """
-    if len(df_recent) < 3:
+    lookback = DOUBLE_PATTERN_LOOKBACK
+    if df_recent is None or df_recent.shape[0] < lookback:
         return False
 
-    high1, close1 = float(df_recent.iloc[-3]["high"]), float(df_recent.iloc[-3]["close"])
-    high2, close2 = float(df_recent.iloc[-2]["high"]), float(df_recent.iloc[-2]["close"])
-    high3, close3 = float(df_recent.iloc[-1]["high"]), float(df_recent.iloc[-1]["close"])
+    try:
+        sub = df_recent.iloc[-lookback:].reset_index(drop=True)
+        for i in range(0, lookback - 2):
+            high1 = float(sub.loc[i, "high"])
+            high2 = float(sub.loc[i + 1, "high"])
+            high3 = float(sub.loc[i + 2, "high"])
+            close2 = float(sub.loc[i + 1, "close"])
 
-    if not (high1 < high2 and high2 > high3):
+            # “고점–하락–고점” 형태
+            if not (high1 < high2 > high3):
+                continue
+            # “중간 봉 종가가 고점 대비 일정 비율만큼 하락”
+            if close2 > high2 * (1 - DOUBLE_TOP_DROP_PCT):
+                continue
+            return True
         return False
-    if close2 >= high2 * 0.99:
+    except Exception:
+        logger.exception("is_double_top: 계산 중 예외 발생")
         return False
-    return True

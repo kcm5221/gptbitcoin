@@ -5,12 +5,13 @@ import logging
 import os
 import sqlite3
 import time
-from typing import Any, Callable, Optional, Dict, List
+from typing import Any, Callable, Optional, Dict
 
 import numpy as np
 import pandas as pd
 import pyupbit
 import requests
+import tempfile
 from openai import OpenAI
 
 from trading_bot.config import (
@@ -23,17 +24,18 @@ from trading_bot.config import (
     PLAY_RATIO,
     RESERVE_RATIO,
     FG_CACHE_TTL,
-    SMA_WIN,
-    ATR_WIN,
+    SMA_WINDOW,
+    ATR_WINDOW,
     PATTERN_HISTORY_FILE,
 )
 
 logger = logging.getLogger(__name__)
 
-# ──────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────
 # “Fear & Greed” 지수 캐시
-# ──────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────
 FNG_CACHE: Dict[str, Any] = {"ts": 0, "value": None}
+
 
 def get_fear_and_greed() -> Optional[int]:
     """
@@ -59,6 +61,7 @@ def get_fear_and_greed() -> Optional[int]:
         logger.warning("get_fear_and_greed() 실패: %s", e)
         return FNG_CACHE["value"]
 
+
 # ──────────────────────────────────────────────────────────────
 # DB 헬퍼: 초기화, 로드, 저장, 로깅
 # ──────────────────────────────────────────────────────────────
@@ -76,6 +79,7 @@ def with_db(fn: Callable[..., Any]):
         finally:
             conn.close()
     return wrapper
+
 
 @with_db
 def init_db(conn: sqlite3.Connection) -> None:
@@ -116,17 +120,19 @@ def init_db(conn: sqlite3.Connection) -> None:
     );
     """)
 
+
 @with_db
 def load_account(conn: sqlite3.Connection) -> tuple[float, float, float]:
     """
     account 테이블에서 잔고(krw, btc, avg_price)를 불러온다.
-    없으면 초기값(30000,0,0)을 삽입 후 리턴.
+    없으면 초기값(INITIAL_KRW, 0, 0)을 삽입 후 리턴.
     """
     row = conn.execute("SELECT krw, btc, avg_price FROM account WHERE id=1").fetchone()
     if row:
         return row["krw"], row["btc"], row["avg_price"]
-    conn.execute("INSERT INTO account VALUES(1, 30000, 0, 0)")
-    return 30000.0, 0.0, 0.0
+    conn.execute("INSERT INTO account VALUES(1, ?, 0, 0)", (MIN_ORDER_KRW,))
+    return MIN_ORDER_KRW, 0.0, 0.0
+
 
 @with_db
 def save_account(conn: sqlite3.Connection, krw: float, btc: float, avg_price: float) -> None:
@@ -137,6 +143,7 @@ def save_account(conn: sqlite3.Connection, krw: float, btc: float, avg_price: fl
         "UPDATE account SET krw=?, btc=?, avg_price=? WHERE id=1",
         (krw, btc, avg_price)
     )
+
 
 @with_db
 def log_indicator(conn: sqlite3.Connection, ts: float, sma: float, atr: float,
@@ -150,6 +157,7 @@ def log_indicator(conn: sqlite3.Connection, ts: float, sma: float, atr: float,
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (ts, sma, atr, vol20, macd_diff, price, fear_greed)
     )
+
 
 @with_db
 def log_trade(conn: sqlite3.Connection, ts: float, decision: str, percentage: float,
@@ -167,6 +175,7 @@ def log_trade(conn: sqlite3.Connection, ts: float, decision: str, percentage: fl
          btc_balance, krw_balance, avg_price, price, mode, reflection)
     )
 
+
 def get_recent_trades(limit: int = 20) -> pd.DataFrame:
     """
     trade_log 테이블에서 최근 limit개 행을 DataFrame으로 반환.
@@ -183,19 +192,21 @@ def get_recent_trades(limit: int = 20) -> pd.DataFrame:
     conn.close()
     return pd.DataFrame(rows, columns=cols)
 
+
 # ──────────────────────────────────────────────────────────────
 # Upbit 실계좌 잔고 동기화 함수
 # ──────────────────────────────────────────────────────────────
 def sync_account_upbit() -> tuple[float, float, float]:
     """
     Upbit 실계좌에서 잔고(krw, btc, avg_price)를 가져옴.
-    인증 오류 등 발생 시 (0,0,0) 리턴.
+    인증 오류 등 발생 시 (0.0, 0.0, 0.0) 리턴.
     """
     try:
         upbit = pyupbit.Upbit(os.getenv("UPBIT_ACCESS_KEY", ""), os.getenv("UPBIT_SECRET_KEY", ""))
         bal = upbit.get_balances()
         if isinstance(bal, dict) and "error" in bal:
             raise RuntimeError(bal["error"]["message"])
+
         def _get_balance(cur: str, f: str = "balance") -> float:
             raw = next((b.get(f, "0") for b in bal if b["currency"] == cur), "0")
             return float(raw or 0.0)
@@ -205,11 +216,13 @@ def sync_account_upbit() -> tuple[float, float, float]:
         logger.warning("sync_account_upbit() 실패: %s", e)
         return 0.0, 0.0, 0.0
 
+
 # ──────────────────────────────────────────────────────────────
 # OpenAI GPT-4o 반성 일기
 # ──────────────────────────────────────────────────────────────
 OPENAI_KEY = os.getenv("OPENAI_API_KEY", "")
 client     = OpenAI(api_key=OPENAI_KEY) if OPENAI_KEY else None
+
 
 def ask_ai_reflection(df: pd.DataFrame, fear_idx: int) -> Optional[str]:
     """
@@ -218,6 +231,7 @@ def ask_ai_reflection(df: pd.DataFrame, fear_idx: int) -> Optional[str]:
     """
     if client is None:
         return None
+
     prompt = (
         "You are a crypto trading coach.\n"
         f"Recent trades: {df.to_json(orient='records')}\n"
@@ -235,36 +249,74 @@ def ask_ai_reflection(df: pd.DataFrame, fear_idx: int) -> Optional[str]:
         logger.warning("ask_ai_reflection() 실패: %s", e)
         return None
 
+
 # ──────────────────────────────────────────────────────────────
-# OHLCV 캐시·로딩 & 지표 계산 (15분봉)
+# OHLCV 캐시·로딩 & 백업 API 함수
 # ──────────────────────────────────────────────────────────────
+
 def load_cached_ohlcv() -> Optional[pd.DataFrame]:
     """
-    CACHE_FILE에 JSON 캐시가 있으면 읽어서 DataFrame으로 반환.
-    TTL(CACHE_TTL)을 벗어나면 None 반환하여 새로 fetch하게 유도.
+    - 캐시 파일이 없으면 None 반환
+    - 파일이 존재해도 TTL을 넘었으면 None 반환
+    - JSON 파싱 오류 시 파일 삭제 후 None 반환
     """
-    if not os.path.exists(CACHE_FILE):
-        return None
     try:
-        raw = json.loads(open(CACHE_FILE, "r", encoding="utf-8").read())
-        if time.time() - raw["ts"] > CACHE_TTL:
+        if not os.path.exists(CACHE_FILE):
             return None
-        df = pd.DataFrame(raw["ohlcv"])
+
+        text = open(CACHE_FILE, "r", encoding="utf-8").read()
+        raw = json.loads(text)
+        # TTL 경과 시 캐시 무효
+        if time.time() - raw.get("ts", 0) > CACHE_TTL:
+            return None
+
+        df = pd.DataFrame(raw.get("ohlcv", {}))
         df.index = pd.to_datetime(df.index)
         return df
-    except Exception:
-        os.remove(CACHE_FILE)
+
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        logger.warning(f"load_cached_ohlcv: 캐시 파일 손상({e}) → 삭제 후 None 반환")
+        try:
+            os.remove(CACHE_FILE)
+        except Exception:
+            logger.exception("load_cached_ohlcv: 캐시 파일 삭제 중 예외 발생")
         return None
+
+    except Exception as e:
+        logger.exception(f"load_cached_ohlcv: 예외 발생 → None 반환: {e}")
+        return None
+
 
 def save_cached_ohlcv(df: pd.DataFrame) -> None:
     """
-    현재 DataFrame(ohlcv)을 JSON으로 캐시에 저장.
-    index를 문자열로 전환해서 JSON 직렬화가 가능하도록 함.
+    - 임시 파일에 먼저 쓰고, os.replace로 이름을 교체하여 원자적 저장을 보장
+    - 디렉터리 존재 여부 검사 후 생성
     """
-    cp = df.copy()
-    cp.index = cp.index.astype(str)
-    with open(CACHE_FILE, "w", encoding="utf-8") as f:
-        json.dump({"ts": time.time(), "ohlcv": cp.to_dict()}, f)
+    try:
+        # 디렉터리 확인
+        os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
+
+        # 임시 파일 생성
+        dirpath = os.path.dirname(CACHE_FILE)
+        with tempfile.NamedTemporaryFile("w", dir=dirpath, delete=False, encoding="utf-8") as tmpf:
+            cp = df.copy()
+            cp.index = cp.index.astype(str)
+            data = {"ts": time.time(), "ohlcv": cp.to_dict()}
+            json.dump(data, tmpf)
+            tmp_name = tmpf.name
+
+        # 임시 파일을 정식 파일명으로 교체 (기존 파일이 있으면 덮어씀)
+        os.replace(tmp_name, CACHE_FILE)
+
+    except Exception as e:
+        logger.exception(f"save_cached_ohlcv: 캐시 저장 중 예외 발생: {e}")
+        # tmp 파일만 남아 있다면 시도해 삭제
+        try:
+            if 'tmp_name' in locals() and os.path.exists(tmp_name):
+                os.remove(tmp_name)
+        except:
+            pass
+
 
 def fetch_direct() -> Optional[pd.DataFrame]:
     """
@@ -290,6 +342,7 @@ def fetch_direct() -> Optional[pd.DataFrame]:
         logger.warning("fetch_direct() 실패: %s", e)
         return None
 
+
 def safe_ohlcv() -> Optional[pd.DataFrame]:
     """
     pyupbit.get_ohlcv() → 실패 시 fetch_direct() 로 백업
@@ -303,6 +356,7 @@ def safe_ohlcv() -> Optional[pd.DataFrame]:
         logger.warning("pyupbit.get_ohlcv 에러: %s, fetch_direct 시도", e)
         return fetch_direct()
 
+
 def calc_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """
     DataFrame에 SMA, ATR, vol20, MACD diff 컬럼을 추가하여 반환.
@@ -313,8 +367,8 @@ def calc_indicators(df: pd.DataFrame) -> pd.DataFrame:
     from ta.utils import dropna
 
     df = dropna(df.copy())
-    df["sma"]      = SMAIndicator(df["close"], SMA_WIN, fillna=True).sma_indicator()
-    df["atr"]      = AverageTrueRange(df["high"], df["low"], df["close"], ATR_WIN, fillna=True).average_true_range()
-    df["vol20"]    = df["volume"].rolling(20).mean()
-    df["macd_diff"]= MACD(df["close"], fillna=True).macd_diff()
+    df["sma"]       = SMAIndicator(df["close"], window=SMA_WINDOW, fillna=True).sma_indicator()
+    df["atr"]       = AverageTrueRange(df["high"], df["low"], df["close"], window=ATR_WINDOW, fillna=True).average_true_range()
+    df["vol20"]     = df["volume"].rolling(window=20).mean()
+    df["macd_diff"] = MACD(df["close"], fillna=True).macd_diff()
     return df
