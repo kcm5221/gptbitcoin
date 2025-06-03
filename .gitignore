@@ -9,7 +9,6 @@ venv/
 !.env.sample
 
 # ── 런타임 파일
-trading.db
 ohlcv_cache.json
 
 # ── 로그
