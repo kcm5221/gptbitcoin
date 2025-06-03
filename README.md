@@ -14,8 +14,6 @@ gptbitcoin/
 ├── init.py
 ├── account_sync.py # 실계좌 잔고 동기화 헬퍼
 ├── ai_helpers.py # GPT-4o 관련 헬퍼 (패턴 의사결정, 리플렉션 등)
-├── candle_patterns.py # 룰 기반 캔들패턴 함수 (이중바닥, 이중천장 등)
-├── candles.py # 개별 캔들 패턴 검사 (Hammer, Doji 등)
 ├── config.py # 설정 및 환경 변수 로드
 ├── context.py # SignalContext 데이터 클래스
 ├── data_fetcher.py # OHLCV 데이터 로드(15m/1h) 헬퍼
@@ -29,10 +27,10 @@ gptbitcoin/
 ├── noise_filters.py # AI 기반 노이즈 감지 헬퍼
 ├── patterns.py # 룰·AI 복합 패턴 검사 및 매매 의사결정
 ├── strategies.py # 보조 전략 A/B (볼륨+SMA, EMA 크로스 등)
-├── utils.py # 공통 유틸리티 (캐시 로드, 계좌 로드, FNG, etc.)
-├── data/ # 데이터/캐시 폴더
+├── utils.py # 공통 유틸리티 (캐시 로드, 계좌 로드, FNG 등)
+├── data/ # 데이터·캐시 폴더
 │ ├── ohlcv_cache.json # 15분봉 OHLCV 캐시 파일
-│ └── trading.db # SQLite 거래 로그 (indicator_log, trade_log, account)
+│ └── trading.db # SQLite 거래 로그 (indicator_log, trade_log, account 등)
 └── logs/ # 자동매매 시 생성되는 로그 파일들
 ```
 ---
@@ -62,7 +60,7 @@ gptbitcoin/
     UPBIT_ACCESS_KEY=여기에_업비트_액세스키
     UPBIT_SECRET_KEY=여기에_업비트_시크릿키
     OPENAI_API_KEY=여기에_OpenAI_API_키
-    DISCORD_WEBHOOK_URL=여기에_디스코드_웹훅_URL
+    DISCORD_WEBHOOK=여기에_디스코드_웹훅_URL
     TICKER=KRW-BTC
     INTERVAL=minute15
 
@@ -112,7 +110,6 @@ gptbitcoin/
        ```
 
        - **deploy_and_run.sh** 내부:
-
          ```bash
          #!/usr/bin/env bash
          set -euo pipefail
@@ -181,32 +178,32 @@ gptbitcoin/
      - 최근 5봉 노이즈(이상치) 검사: 볼륨 극단 감소 시 AI(`ask_noise_filter`)에게 물어봅니다.  
    - **`trading_bot/patterns.py`**  
      - **룰 기반 단일/다중 캔들패턴**  
-       - 이중바닥, 이중천장, 망치형·역망치형·도지 + 볼륨 스파이크 → 매수/매도  
+       - 이중바닥·이중천장, 망치형·역망치형·도지 + 볼륨 스파이크 → 매수/매도  
        - Stop‐loss(94% 이하), Take‐profit(5% 이상), Trend‐sell(FNG + MACD)  
      - **AI 복합 패턴**  
        - 최근 100봉 데이터를 GPT-4o에 보내 “복합 차트 패턴” 태깅 요청  
-       - 이미 룰에 정의된 패턴(`KNOWN_PATTERNS`)이 아니면 AI에게 “buy/sell/hold” 결정 요청  
+       - 이미 룰에 정의된 패턴이 아니면 AI에게 “buy/sell/hold” 결정 요청  
        - 새로운 패턴은 `trading_bot/data/pattern_history.json`에 기록해 둡니다.
 
 7. **보조 전략 A / B**  
    - **A. 볼륨 스파이크 + price > SMA30 → 매수 / price < SMA30 → 매도**  
    - **B. EMA(12/26) 골든 크로스 → 매수 / 데드 크로스 → 매도**  
-   - 두 보조 전략은 룰·AI 패턴에 신호가 없을 때 차례로 동작합니다.
+   - 두 보조 전략은 룰·AI 패턴 신호가 없을 때 차례로 동작합니다.
 
 8. **실제 주문 실행 (시장가) + 동적 리스크 관리**  
    - `trading_bot/executor.py`  
      - ATR 기반으로 “포지션 크기”를 1% 리스크 기준으로 동적 계산  
      - 최소 주문액(`MIN_ORDER_KRW`) 미만이면 주문하지 않음  
-     - 실거래 모드(`LIVE_MODE`)에서는 Upbit 시장가 주문  
+     - 실거래 모드(`LIVE_MODE=true`)에서는 Upbit 시장가 주문  
      - 가상 모드에서는 DB 계좌에서 가상 계산만 수행
 
 9. **로그 기록 & Discord 알림**  
    - `trading_bot/db_helpers.py`  
-     - SQLite 테이블: `account(id=1)`, `indicator_log`, `trade_log` (자동 생성)  
+     - SQLite 테이블: `account(id=1)`, `indicator_log`, `trade_log`, `reflection_log` (자동 생성)  
    - `trading_bot/executor.py` → `log_and_notify()`  
      - 매매 신호를 DB(`trade_log`)에 기록하고,  
      - 실제 주문이 체결되었을 때만 Discord Webhook에 알림을 보냅니다.  
-     - (`DISCORD_WEBHOOK_URL`을 빈 문자열로 두면 알림이 가지 않습니다.)
+     - (`DISCORD_WEBHOOK`을 빈 문자열로 두면 알림이 가지 않습니다.)
 
 ---
 
