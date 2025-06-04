@@ -344,3 +344,30 @@ def ask_pattern_decision(pattern_name: str, recent_data: pd.DataFrame) -> str:
     except Exception:
         logger.exception("ask_pattern_decision() 호출 중 예외 발생")
         return "hold"
+
+
+def ask_ai_parameter_tuning(df_recent: pd.DataFrame, params: Dict[str, str]) -> str:
+    """Send recent candles and current params to AI and return raw suggestion."""
+    if client is None:
+        return ""
+
+    df_json = df_recent.reset_index().rename(columns={"index": "datetime"}).to_dict(orient="records")
+    candles = json.dumps(df_json, default=str)
+    prompt = (
+        "You are an experienced quantitative trading assistant.\n"
+        "Given the following 100 recent 15-minute candles (JSON) and current strategy parameters (JSON),\n"
+        "suggest improved parameter values as pure JSON like {\"SMA_WINDOW\":30}.\n"
+        "If no changes are needed, answer in Korean exactly '더 이상 변경할 사항 없음'.\n\n"
+        f"CANDLES={candles}\n\nPARAMS={json.dumps(params)}"
+    )
+
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-2024-08-06",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=200,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception:
+        logger.exception("ask_ai_parameter_tuning() 호출 중 예외 발생")
+        return ""

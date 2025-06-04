@@ -29,6 +29,7 @@ from trading_bot.config import (
     TICKER,
     MIN_ORDER_KRW,
     VOLUME_SPIKE_THRESHOLD,
+    PROJECT_ROOT,
     RSI_OVERRIDE,
     MACD_1H_THRESHOLD,
     FG_EXTREME_FEAR
@@ -211,22 +212,28 @@ def ai_trading():
     # 13) 실제 매매 실행 (리스크 관리 포함)
     executed, pct_used = execute_trade(ctx, buy_sig, sell_sig, pattern)
     logger.info(f"12) execute_trade() 결과: executed={executed}, pct={pct_used:.2f}%")
-
-    # ── “AI 반성문”은 매매(executed=True) 시에만 생성/저장 ──────────────────────────
+    # ── AI 반성문: 11시간 간격으로만 생성/저장 ───────────────────────────────
     reflection_id = 0
-    if executed:
-        try:
+    try:
+        last_ts = get_last_reflection_ts()
+        now_ts = time.time()
+        if now_ts - last_ts >= 39600:
             recent_trades = get_recent_trades(limit=20)
             from trading_bot.ai_helpers import ask_ai_reflection
+            from trading_bot.env_utils import parse_suggestion, update_env_vars
             reflection_text = ask_ai_reflection(recent_trades, ctx.fear_idx) or ""
             if reflection_text:
-                reflection_id = log_reflection(time.time(), reflection_text)
+                suggestions = parse_suggestion(reflection_text)
+                env_path = PROJECT_ROOT.parent / ".env"
+                update_env_vars(suggestions, env_path)
+                reflection_id = log_reflection(now_ts, reflection_text)
                 logger.info(f"반성문 저장 완료 (reflection_id={reflection_id})")
-        except Exception as e:
-            logger.exception(f"반성문 생성/저장 중 예외 발생: {e}")
-            reflection_id = 0
-    else:
-        logger.info("반성문 생성 생략: 매매가 이뤄지지 않음")
+        else:
+            logger.info("반성 생략")
+    except Exception as e:
+        logger.exception(f"반성문 생성/저장 중 예외 발생: {e}")
+        reflection_id = 0
+
 
     # ── trade_log 기록 (반성문 ID 포함) ─────────────────────────────────────────────
     log_trade(
