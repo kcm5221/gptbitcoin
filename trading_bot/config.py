@@ -40,6 +40,7 @@ DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK_URL", "").strip()
 
 PLAY_RATIO = float(os.getenv("PLAY_RATIO", "0.05"))
 RESERVE_RATIO = float(os.getenv("RESERVE_RATIO", "0.10"))
+BASE_RISK = float(os.getenv("BASE_RISK", "0.02"))
 
 # 2) 가상 계좌 기본값
 INITIAL_KRW = float(os.getenv("INITIAL_KRW", "30000.0"))
