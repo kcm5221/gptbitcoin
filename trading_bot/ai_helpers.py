@@ -60,16 +60,44 @@ def _df_hashable_key(df: pd.DataFrame, rows: int = 10) -> str:
     return subset.to_json(orient="records")
 
 
-def ask_ai_reflection(df: pd.DataFrame, fear_idx: int) -> Optional[str]:
-    """
-    최근 trade_log 20건과 fear_idx를 GPT-4o 모델에 넘겨서
-    120 토큰 이내 분량의 “반성 일기”를 받아옴.
-    → 캐시: 동일 df+fear_idx 조합은 1일간 캐시된 결과 재사용
-    """
-    if client is None:
-        return None
+def ask_ai_reflection(
+    df: pd.DataFrame,
+    fear_idx: int,
+    chart_df: Optional[pd.DataFrame] = None,
+    recursive: bool = False,
+    max_iter: int = 2,
+) -> Tuple[Optional[str], dict]:
+    """Return an AI reflection text with optional recursive improvement.
 
-    key = ("reflection", df.to_json(orient="records"), fear_idx)
+    Parameters
+    ----------
+    df : DataFrame
+        Recent trades to send to the model.
+    fear_idx : int
+        Current Fear-Greed index.
+    chart_df : DataFrame, optional
+        Recent candle data serialized for more context.
+    recursive : bool, default False
+        Whether the AI should refine its own answer.
+    max_iter : int, default 2
+        Maximum number of refinement iterations.
+    """
+
+    if client is None:
+        return None, {}
+
+    chart_json = (
+        chart_df.reset_index().to_json(orient="records") if chart_df is not None else ""
+    )
+
+    key = (
+        "reflection",
+        df.to_json(orient="records"),
+        fear_idx,
+        chart_json,
+        recursive,
+        max_iter,
+    )
     cached = _reflection_cache.get(key)
     if cached is not None:
         return cached
@@ -77,21 +105,76 @@ def ask_ai_reflection(df: pd.DataFrame, fear_idx: int) -> Optional[str]:
     prompt = (
         "You are a crypto trading coach.\n"
         f"Recent trades: {df.to_json(orient='records')}\n"
+        f"Recent candles: {chart_json}\n"
         f"Fear-Greed index={fear_idx}\n"
         "Respond in ≤120 words: what worked, what didn't, one improvement."
     )
+
     try:
         resp = client.chat.completions.create(
             model="gpt-4o-2024-08-06",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=120,
+            max_tokens=150,
         )
-        content = resp.choices[0].message.content.strip()
-        _reflection_cache.set(key, content)
-        return content
+        reflection = resp.choices[0].message.content.strip()
+
+        if recursive:
+            for _ in range(max_iter - 1):
+                follow = (
+                    "Here is your previous reflection:\n"
+                    f"{reflection}\n\n"
+                    "Critique and improve it. If it cannot be improved, answer 'NO FURTHER IMPROVEMENTS'."
+                )
+                resp = client.chat.completions.create(
+                    model="gpt-4o-2024-08-06",
+                    messages=[{"role": "user", "content": follow}],
+                    max_tokens=150,
+                )
+                improved = resp.choices[0].message.content.strip()
+                if improved.upper().startswith("NO FURTHER IMPROVEMENTS"):
+                    break
+                reflection = improved
+
+        params = parse_env_suggestions(reflection)
+        result = (reflection, params)
+        _reflection_cache.set(key, result)
+        return result
     except Exception:
         logger.exception("ask_ai_reflection() 호출 중 예외 발생")
-        return None
+        return None, {}
+
+
+def parse_env_suggestions(text: str) -> dict:
+    """Extract KEY=VALUE suggestions from reflection text."""
+    matches = re.findall(r"([A-Z_]+)\s*=\s*([0-9\.]+)", text)
+    return {m[0]: m[1] for m in matches}
+
+
+def apply_to_env(params: dict, env_file: str = ".env") -> None:
+    """Update ``env_file`` with the given parameters."""
+    if not params:
+        return
+
+    try:
+        lines = []
+        if os.path.exists(env_file):
+            with open(env_file, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+
+        with open(env_file, "w", encoding="utf-8") as f:
+            written = set()
+            for line in lines:
+                key = line.split("=", 1)[0].strip()
+                if key in params:
+                    f.write(f"{key}={params[key]}\n")
+                    written.add(key)
+                else:
+                    f.write(line)
+            for k, v in params.items():
+                if k not in written:
+                    f.write(f"{k}={v}\n")
+    except Exception:
+        logger.exception("apply_to_env() 호출 중 예외 발생")
 
 
 def load_pattern_history() -> List[Dict[str, Any]]:

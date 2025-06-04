@@ -217,11 +217,20 @@ def ai_trading():
     if executed:
         try:
             recent_trades = get_recent_trades(limit=20)
-            from trading_bot.ai_helpers import ask_ai_reflection
-            reflection_text = ask_ai_reflection(recent_trades, ctx.fear_idx) or ""
+            from trading_bot.ai_helpers import ask_ai_reflection, apply_to_env
+            chart_recent = ctx.df_15m.tail(100)
+            reflection_text, updates = ask_ai_reflection(
+                recent_trades,
+                ctx.fear_idx,
+                chart_recent,
+                recursive=True,
+            )
             if reflection_text:
                 reflection_id = log_reflection(time.time(), reflection_text)
                 logger.info(f"반성문 저장 완료 (reflection_id={reflection_id})")
+            if updates:
+                apply_to_env(updates)
+                logger.info(f".env 업데이트: {updates}")
         except Exception as e:
             logger.exception(f"반성문 생성/저장 중 예외 발생: {e}")
             reflection_id = 0
