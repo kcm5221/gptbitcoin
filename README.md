@@ -204,7 +204,6 @@ gptbitcoin/
    - `trading_bot/executor.py` → `log_and_notify()`
      - 매매 신호를 DB(`trade_log`)에 기록하고,
      - 실제 주문이 체결되었을 때만 Discord Webhook에 알림을 보냅니다.
-    - (`DISCORD_WEBHOOK_URL`을 빈 문자열로 두면 알림이 가지 않습니다.)
 
 10. **AI 반성문 & 전략 자동 조정**
    - 최근 거래 내역과 차트 데이터를 GPT-4o에 보내 간단한 반성문을 생성합니다.
