@@ -24,6 +24,7 @@ client = OpenAI(api_key=OPENAI_KEY) if OPENAI_KEY else None
 # 간단한 메모리 기반 TTL 캐시 구현
 # ──────────────────────────────────────────────
 
+
 class TTLCache:
     def __init__(self, ttl_sec: float):
         self.ttl = ttl_sec
@@ -48,8 +49,9 @@ _candle_patterns_cache = TTLCache(ttl_sec=60.0)
 _pattern_decision_cache = TTLCache(ttl_sec=300.0)
 # (3) ask_noise_filter 캐시: 동일 5봉 데이터 해시를 30초간 재사용
 _noise_filter_cache = TTLCache(ttl_sec=30.0)
-# (4) ask_ai_reflection 캐시: 같은 최근 20개 트레이드 + fear_idx 조합을 86400초(1일)간 재사용
-_reflection_cache = TTLCache(ttl_sec=86400.0)
+# (4) ask_ai_reflection 캐시: 같은 최근 20개 트레이드 + fear_idx 조합을
+# 39600초(약 11시간)간 재사용
+_reflection_cache = TTLCache(ttl_sec=39600.0)
 
 
 def _df_hashable_key(df: pd.DataFrame, rows: int = 10) -> str:
@@ -192,10 +194,14 @@ def load_pattern_history() -> List[Dict[str, Any]]:
         if isinstance(data, list):
             return data
         else:
-            logger.warning("load_pattern_history: 파일 내용이 리스트가 아님 → 빈 리스트 반환")
+            logger.warning(
+                "load_pattern_history: 파일 내용이 리스트가 아님 → 빈 리스트 반환"
+            )
             return []
     except json.JSONDecodeError as e:
-        logger.warning(f"load_pattern_history: JSON 디코드 오류({e}) → 파일 백업 후 빈 리스트 반환")
+        logger.warning(
+            f"load_pattern_history: JSON 디코드 오류({e}) → 파일 백업 후 빈 리스트 반환"
+        )
         try:
             bak_path = str(PATTERN_HISTORY_FILE) + ".bak"
             os.replace(PATTERN_HISTORY_FILE, bak_path)
@@ -221,7 +227,9 @@ def save_pattern_history_entry(entry: Dict[str, Any]) -> None:
 
         dirpath = os.path.dirname(PATTERN_HISTORY_FILE)
         # 임시 파일 생성
-        with tempfile.NamedTemporaryFile("w", dir=dirpath, delete=False, encoding="utf-8") as tmpf:
+        with tempfile.NamedTemporaryFile(
+            "w", dir=dirpath, delete=False, encoding="utf-8"
+        ) as tmpf:
             json.dump(history, tmpf, ensure_ascii=False, indent=2)
             tmp_name = tmpf.name
 
@@ -288,7 +296,7 @@ def ask_candle_patterns(df_recent: pd.DataFrame) -> Optional[List[Dict[str, Any]
         resp = client.chat.completions.create(
             model="gpt-4o-2024-08-06",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=500
+            max_tokens=500,
         )
         raw = resp.choices[0].message.content.strip()
 
@@ -340,7 +348,7 @@ def ask_noise_filter(df_last5: pd.DataFrame) -> Optional[bool]:
         resp = client.chat.completions.create(
             model="gpt-4o-2024-08-06",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=10
+            max_tokens=10,
         )
         answer = resp.choices[0].message.content.strip().lower()
         is_noise = answer.startswith("yes")
@@ -365,7 +373,9 @@ def ask_pattern_decision(pattern_name: str, recent_data: pd.DataFrame) -> str:
     if cached is not None:
         return cached
 
-    df_for_ai = recent_data.iloc[-10:].reset_index().rename(columns={"index": "datetime"})
+    df_for_ai = (
+        recent_data.iloc[-10:].reset_index().rename(columns={"index": "datetime"})
+    )
     records = df_for_ai.to_dict(orient="records")
     data_json = json.dumps(records, default=str)
 
@@ -394,9 +404,7 @@ def ask_pattern_decision(pattern_name: str, recent_data: pd.DataFrame) -> str:
             f"Win rate: {win_rate:.1%}, avg return: {avg_return:.2f}%. "
         )
     else:
-        history_summary = (
-            "No recorded history for this pattern. Proceed with caution. "
-        )
+        history_summary = "No recorded history for this pattern. Proceed with caution. "
 
     prompt = (
         f"You are an experienced crypto trading AI.\n"
@@ -413,7 +421,7 @@ def ask_pattern_decision(pattern_name: str, recent_data: pd.DataFrame) -> str:
         resp = client.chat.completions.create(
             model="gpt-4o-2024-08-06",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=30
+            max_tokens=30,
         )
         raw = resp.choices[0].message.content.strip().lower()
         if "buy" in raw:
