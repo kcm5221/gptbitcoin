@@ -10,7 +10,6 @@ import requests
 
 from trading_bot.account_sync import sync_account_upbit
 from trading_bot.db_helpers import log_indicator, get_recent_trades
-from trading_bot.ai_helpers import ask_ai_reflection
 from trading_bot.config import LIVE_MODE, TICKER, DISCORD_WEBHOOK, PLAY_RATIO, MIN_ORDER_KRW
 
 logger = logging.getLogger(__name__)
