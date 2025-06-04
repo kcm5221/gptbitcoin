@@ -4,6 +4,7 @@
 import argparse
 import logging
 import time
+from pathlib import Path
 
 import pandas as pd
 import requests
@@ -21,7 +22,7 @@ from trading_bot.account_sync import sync_account_upbit
 from trading_bot.db_helpers import (
     init_db, load_account, save_account,
     log_indicator, log_trade, log_reflection,
-    has_indicator, get_recent_trades
+    has_indicator, get_recent_trades, get_last_reflection_ts
 )
 from trading_bot.utils import get_fear_and_greed
 from trading_bot.config import (
@@ -32,6 +33,11 @@ from trading_bot.config import (
     RSI_OVERRIDE,
     MACD_1H_THRESHOLD,
     FG_EXTREME_FEAR
+)
+from trading_bot.env_utils import (
+    read_env_vars,
+    parse_suggestion,
+    update_env_vars,
 )
 
 # 디버그 로그가 보이도록 레벨을 DEBUG로 설정
@@ -216,12 +222,34 @@ def ai_trading():
     reflection_id = 0
     if executed:
         try:
-            recent_trades = get_recent_trades(limit=20)
-            from trading_bot.ai_helpers import ask_ai_reflection
-            reflection_text = ask_ai_reflection(recent_trades, ctx.fear_idx) or ""
-            if reflection_text:
-                reflection_id = log_reflection(time.time(), reflection_text)
-                logger.info(f"반성문 저장 완료 (reflection_id={reflection_id})")
+            last_ts = get_last_reflection_ts()
+            now = time.time()
+            if now - last_ts < 39600:
+                logger.info("반성 생략")
+            else:
+                recent_trades = get_recent_trades(limit=20)
+                chart_recent = ctx.df_15m.tail(100)
+                env_path = Path(".env")
+                env_params = read_env_vars(env_path)
+                from trading_bot.ai_helpers import ask_ai_reflection
+                for _ in range(3):
+                    reflection_text, _ = ask_ai_reflection(
+                        recent_trades,
+                        ctx.fear_idx,
+                        chart_recent,
+                        env_params=env_params,
+                        recursive=True,
+                    )
+                    if reflection_text:
+                        reflection_id = log_reflection(time.time(), reflection_text)
+                        suggestions = parse_suggestion(reflection_text)
+                        if suggestions:
+                            update_env_vars(suggestions, env_path)
+                            env_params = read_env_vars(env_path)
+                        if "더 이상 변경할 사항 없음" in reflection_text or not suggestions:
+                            break
+                    else:
+                        break
         except Exception as e:
             logger.exception(f"반성문 생성/저장 중 예외 발생: {e}")
             reflection_id = 0
