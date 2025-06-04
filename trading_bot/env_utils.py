@@ -1,3 +1,4 @@
+import json
 import re
 import logging
 from pathlib import Path
@@ -17,8 +18,17 @@ STRATEGY_KEYS = [
 
 
 def parse_suggestion(text: str) -> Dict[str, str]:
-    """Extract KEY=VALUE pairs from AI response text."""
-    pairs = re.findall(r"([A-Z][A-Z0-9_]*)\s*=\s*([^\s,;]+)", text)
+    """Extract KEY=VALUE pairs or JSON from AI response text."""
+    text = text.strip()
+    # JSON 형식("{"...") 시도
+    if text.startswith("{") and text.endswith("}" ):
+        try:
+            data = json.loads(text)
+            return {str(k): str(v) for k, v in data.items()}
+        except Exception:
+            pass
+
+    pairs = re.findall(r"([A-Z][A-Z0-9_]*)\s*[:=]\s*([^\s,;]+)", text)
     return {k: v for k, v in pairs}
 
 
@@ -37,10 +47,11 @@ def update_env_vars(suggestions: Dict[str, str], dotenv_path: Path) -> None:
             key, val, comment = m.groups()
             if key in remaining:
                 new_val = remaining.pop(key)
-                old_val = val.strip()
+                old_val = val.rstrip()
+                trailing = val[len(old_val):]
                 if old_val != new_val:
                     logger.info(f"[AI-TUNED] {key}: {old_val} → {new_val}")
-                line = f"{key}={new_val}{comment}"
+                line = f"{key}={new_val}{trailing}{comment}"
         updated.append(line)
 
     for key, val in remaining.items():
