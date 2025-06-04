@@ -6,7 +6,6 @@
 ```
 gptbitcoin/
 ├── .env # 환경 변수 파일
-├── .env.sample # 환경 변수 예시
 ├── .gitignore
 ├── deploy_and_run.sh # 배포 · 실행 스크립트 (cron용)
 ├── requirements.txt # 의존성 리스트
@@ -53,7 +52,7 @@ gptbitcoin/
     pip install -r requirements.txt
     ```
 
-3. **환경 변수 설정 (`.env` 파일 생성)**
+3. **환경 변수 설정 (`.env` 파일 생성, `.env.sample` 참고)**
 
     ```
     LIVE_MODE=true
@@ -211,13 +210,12 @@ gptbitcoin/
      지나야만 저장됩니다.
    - 반성문에 `KEY=VALUE` 형태가 포함되면 `.env` 파일에 자동 반영해 전략 수치를
      업데이트합니다.
-
 ---
 
 ## 🛡️ 보안 주의 사항
 
-- `.env` 파일에는 API 키를 절대 공개 저장소에 커밋하지 마세요.  
-- GitHub 등에는 `.env`를 포함하지 않도록 이미 `.gitignore`에 지정되어 있습니다.  
+- `.env` 파일에는 API 키를 절대 공개 저장소에 커밋하지 마세요.
+- GitHub 등에는 `.env`를 포함하지 않도록 이미 `.gitignore`에 지정되어 있습니다.
 - `requirements.txt`에는 외부 라이브러리 목록만 기록하고, 민감한 정보는 코드 또는 환경 변수로 관리합니다.
 
 ---

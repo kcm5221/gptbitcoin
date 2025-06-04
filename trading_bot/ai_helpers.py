@@ -153,7 +153,10 @@ def parse_env_suggestions(text: str) -> dict:
 
 
 def apply_to_env(params: dict, env_file: str = ".env") -> None:
-    """Update ``env_file`` with the given parameters."""
+    """Update ``env_file`` with the given parameters.
+
+    기본적으로 `.env` 파일을 수정합니다.
+    """
     if not params:
         return
 

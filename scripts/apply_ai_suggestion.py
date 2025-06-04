@@ -4,7 +4,8 @@ import re
 
 # ai_tuning_suggestion.txt 형식에 맞춰 조정한 예시
 AI_SUGGEST_FILE = "ai_tuning_suggestion.txt"
-ENV_FILE        = ".env"
+ENV_FILE = ".env"
+
 
 def parse_suggestion(text: str) -> dict:
     """
@@ -21,11 +22,14 @@ def parse_suggestion(text: str) -> dict:
     if atr_match:
         result["ATR_WIN"] = atr_match.group(1)
 
-    vol_match = re.search(r"volume\s+threshold\s*(?:of|:)?\s*([0-9]+\.?[0-9]*)", text, re.IGNORECASE)
+    vol_match = re.search(
+        r"volume\s+threshold\s*(?:of|:)?\s*([0-9]+\.?[0-9]*)", text, re.IGNORECASE
+    )
     if vol_match:
         result["VOLUME_THRESHOLD"] = vol_match.group(1)
 
     return result
+
 
 def apply_to_env(params: dict):
     """
@@ -50,6 +54,7 @@ def apply_to_env(params: dict):
                 f.write(line)
 
     print(f".env 파일이 다음 값으로 업데이트되었습니다: {params}")
+
 
 if __name__ == "__main__":
     # 1) AI 제안 불러오기
