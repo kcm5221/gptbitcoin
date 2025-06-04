@@ -19,9 +19,14 @@ from trading_bot.executor import execute_trade, log_and_notify
 
 from trading_bot.account_sync import sync_account_upbit
 from trading_bot.db_helpers import (
-    init_db, load_account, save_account,
-    log_indicator, log_trade, log_reflection,
-    has_indicator, get_recent_trades
+    init_db,
+    load_account,
+    save_account,
+    log_indicator,
+    log_trade,
+    log_reflection,
+    has_indicator,
+    get_recent_trades,
 )
 from trading_bot.utils import get_fear_and_greed
 from trading_bot.config import (
@@ -31,13 +36,12 @@ from trading_bot.config import (
     VOLUME_SPIKE_THRESHOLD,
     RSI_OVERRIDE,
     MACD_1H_THRESHOLD,
-    FG_EXTREME_FEAR
+    FG_EXTREME_FEAR,
 )
 
 # 디버그 로그가 보이도록 레벨을 DEBUG로 설정
 logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s [%(levelname)s] %(message)s"
+    level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
 logger = logging.getLogger(__name__)
@@ -119,7 +123,7 @@ def ai_trading():
         krw=krw,
         btc=btc,
         avg_price=avg_price,
-        fear_idx=fear_idx
+        fear_idx=fear_idx,
     )
 
     # 6) 이미 처리된 봉인지 확인
@@ -134,9 +138,9 @@ def ai_trading():
     # 7) 상위 차트(1시간봉) 추세 필터 + 예외 조건(RSI, MACD, Fear)
     if ctx.df_1h is not None:
         sma50_1h = float(ctx.last_1h["sma50_1h"])
-        rsi_1h   = float(ctx.last_1h["rsi_1h"])
-        macd_1h  = float(ctx.last_1h["macd_diff_1h"])
-        fear     = int(ctx.fear_idx)
+        rsi_1h = float(ctx.last_1h["rsi_1h"])
+        macd_1h = float(ctx.last_1h["macd_diff_1h"])
+        fear = int(ctx.fear_idx)
 
         # ① 디버깅용 로그: 실제 지표값이 어떻게 나오는지 확인
         logger.debug(
@@ -146,11 +150,11 @@ def ai_trading():
 
         if ctx.price < sma50_1h:
             # 예외 1) 1h RSI가 RSI_OVERRIDE 이하
-            cond_rsi  = (rsi_1h <= RSI_OVERRIDE)
+            cond_rsi = rsi_1h <= RSI_OVERRIDE
             # 예외 2) 1h MACD diff 절대값 ≤ MACD_1H_THRESHOLD
-            cond_macd = (abs(macd_1h) <= MACD_1H_THRESHOLD)
+            cond_macd = abs(macd_1h) <= MACD_1H_THRESHOLD
             # 예외 3) Fear ≤ FG_EXTREME_FEAR
-            cond_fear = (fear <= FG_EXTREME_FEAR)
+            cond_fear = fear <= FG_EXTREME_FEAR
 
             if not (cond_rsi or cond_macd or cond_fear):
                 logger.info(
@@ -183,21 +187,27 @@ def ai_trading():
         buy_a, sell_a, pat_a = apply_strategy_A(ctx)
         if buy_a or sell_a:
             buy_sig, sell_sig, pattern = buy_a, sell_a, pat_a
-        logger.info(f"10) 보조 전략 A 결과: buy={buy_a}, sell={sell_a}, pattern={pat_a}")
+        logger.info(
+            f"10) 보조 전략 A 결과: buy={buy_a}, sell={sell_a}, pattern={pat_a}"
+        )
 
     # 11) 보조 전략 B (위에서도 신호 없을 때)
     if not (buy_sig or sell_sig):
         buy_b, sell_b, pat_b = apply_strategy_B(ctx)
         if buy_b or sell_b:
             buy_sig, sell_sig, pattern = buy_b, sell_b, pat_b
-        logger.info(f"11) 보조 전략 B 결과: buy={buy_b}, sell={sell_b}, pattern={pat_b}")
+        logger.info(
+            f"11) 보조 전략 B 결과: buy={buy_b}, sell={sell_b}, pattern={pat_b}"
+        )
 
     # 12) 먼지 처리: 잔여 BTC가 최소 주문액 미만일 때 시장가 매도하거나 “버림” 로그
     if ctx.btc * ctx.price < MIN_ORDER_KRW:
         if ctx.btc > 0:
             if LIVE_MODE:
                 try:
-                    logger.info(f"잔량 BTC({ctx.btc:.6f})가 최소 주문액 미만 → 전량 매도 시도")
+                    logger.info(
+                        f"잔량 BTC({ctx.btc:.6f})가 최소 주문액 미만 → 전량 매도 시도"
+                    )
                     # 실제 Upbit 시장가 매도: Upbit API 호출
                     # upbit = pyupbit.Upbit(os.getenv("UPBIT_ACCESS_KEY"), os.getenv("UPBIT_SECRET_KEY"))
                     # upbit.sell_market_order(TICKER, ctx.btc)
@@ -216,21 +226,33 @@ def ai_trading():
     reflection_id = 0
     if executed:
         try:
-            recent_trades = get_recent_trades(limit=20)
-            from trading_bot.ai_helpers import ask_ai_reflection, apply_to_env
-            chart_recent = ctx.df_15m.tail(100)
-            reflection_text, updates = ask_ai_reflection(
-                recent_trades,
-                ctx.fear_idx,
-                chart_recent,
-                recursive=True,
-            )
-            if reflection_text:
-                reflection_id = log_reflection(time.time(), reflection_text)
-                logger.info(f"반성문 저장 완료 (reflection_id={reflection_id})")
-            if updates:
-                apply_to_env(updates)
-                logger.info(f".env 업데이트: {updates}")
+            from trading_bot.config import REFLECTION_INTERVAL_SEC
+            from trading_bot.db_helpers import get_last_reflection_ts
+
+            last_ts = get_last_reflection_ts()
+            now = time.time()
+            if now - last_ts >= REFLECTION_INTERVAL_SEC:
+                recent_trades = get_recent_trades(limit=20)
+                from trading_bot.ai_helpers import ask_ai_reflection, apply_to_env
+
+                chart_recent = ctx.df_15m.tail(100)
+                reflection_text, updates = ask_ai_reflection(
+                    recent_trades,
+                    ctx.fear_idx,
+                    chart_recent,
+                    recursive=True,
+                )
+                if reflection_text:
+                    reflection_id = log_reflection(time.time(), reflection_text)
+                    logger.info(f"반성문 저장 완료 (reflection_id={reflection_id})")
+                if updates:
+                    apply_to_env(updates)
+                    logger.info(f".env 업데이트: {updates}")
+            else:
+                logger.info(
+                    "반성문 건너뜀: 마지막 작성 이후 %.1f시간 미만",
+                    REFLECTION_INTERVAL_SEC / 3600,
+                )
         except Exception as e:
             logger.exception(f"반성문 생성/저장 중 예외 발생: {e}")
             reflection_id = 0
@@ -244,16 +266,17 @@ def ai_trading():
         pct_used,
         pattern or "",
         pattern or "No signal",
-        ctx.btc, ctx.krw, ctx.avg_price, ctx.price,
+        ctx.btc,
+        ctx.krw,
+        ctx.avg_price,
+        ctx.price,
         ("live" if LIVE_MODE else "virtual"),
-        reflection_id
+        reflection_id,
     )
 
     # ── indicator_log에도 FNG 저장 ─────────────────────────────────────────────────
     log_indicator(
-        time.time(),
-        ctx.sma30, ctx.atr15, ctx.vol20,
-        ctx.macd, ctx.price, ctx.fear_idx
+        time.time(), ctx.sma30, ctx.atr15, ctx.vol20, ctx.macd, ctx.price, ctx.fear_idx
     )
 
     # ── Discord 알림 호출 ───────────────────────────────────────────────────────────
@@ -268,7 +291,7 @@ def main():
         "--mode",
         choices=["intraday"],
         default="intraday",
-        help="Trading mode: 'intraday' (15분봉 인트라데이)"
+        help="Trading mode: 'intraday' (15분봉 인트라데이)",
     )
     args = parser.parse_args()
 
@@ -279,7 +302,9 @@ def main():
             ai_trading()
             break
         except requests.RequestException as e:
-            logger.error(f"네트워크 오류로 인해 ai_trading() 실패 (시도 {attempt}/{max_retries}): {e}")
+            logger.error(
+                f"네트워크 오류로 인해 ai_trading() 실패 (시도 {attempt}/{max_retries}): {e}"
+            )
             if attempt < max_retries:
                 time.sleep(1)
             else:
@@ -290,9 +315,12 @@ def main():
         except Exception as e:
             logger.error("Unexpected error: %s", e, exc_info=True)
             from trading_bot.config import DISCORD_WEBHOOK
+
             if LIVE_MODE and DISCORD_WEBHOOK:
                 try:
-                    requests.post(DISCORD_WEBHOOK, json={"content": f"자동매매 장애: `{e}`"})
+                    requests.post(
+                        DISCORD_WEBHOOK, json={"content": f"자동매매 장애: `{e}`"}
+                    )
                 except Exception as post_err:
                     logger.exception(f"Discord 알림 중 예외 발생: {post_err}")
             break

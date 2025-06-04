@@ -78,6 +78,7 @@ gptbitcoin/
     MIN_ORDER_KRW=5000
     CACHE_TTL=3600
     FG_CACHE_TTL=82800
+    REFLECTION_INTERVAL_HOURS=11
     BASE_RISK=0.02
     ```
 
@@ -197,13 +198,20 @@ gptbitcoin/
      - 실거래 모드(`LIVE_MODE=true`)에서는 Upbit 시장가 주문  
      - 가상 모드에서는 DB 계좌에서 가상 계산만 수행
 
-9. **로그 기록 & Discord 알림**  
-   - `trading_bot/db_helpers.py`  
-     - SQLite 테이블: `account(id=1)`, `indicator_log`, `trade_log`, `reflection_log` (자동 생성)  
-   - `trading_bot/executor.py` → `log_and_notify()`  
-     - 매매 신호를 DB(`trade_log`)에 기록하고,  
-     - 실제 주문이 체결되었을 때만 Discord Webhook에 알림을 보냅니다.  
+9. **로그 기록 & Discord 알림**
+   - `trading_bot/db_helpers.py`
+     - SQLite 테이블: `account(id=1)`, `indicator_log`, `trade_log`, `reflection_log` (자동 생성)
+   - `trading_bot/executor.py` → `log_and_notify()`
+     - 매매 신호를 DB(`trade_log`)에 기록하고,
+     - 실제 주문이 체결되었을 때만 Discord Webhook에 알림을 보냅니다.
      - (`DISCORD_WEBHOOK`을 빈 문자열로 두면 알림이 가지 않습니다.)
+
+10. **AI 반성문 & 전략 자동 조정**
+   - 최근 거래 내역과 차트 데이터를 GPT-4o에 보내 간단한 반성문을 생성합니다.
+   - 새 반성문은 마지막 작성 이후 `REFLECTION_INTERVAL_HOURS`(기본 11시간) 이상
+     지나야만 저장됩니다.
+   - 반성문에 `KEY=VALUE` 형태가 포함되면 `.env` 파일에 자동 반영해 전략 수치를
+     업데이트합니다.
 
 ---
 
