@@ -344,3 +344,54 @@ def ask_pattern_decision(pattern_name: str, recent_data: pd.DataFrame) -> str:
     except Exception:
         logger.exception("ask_pattern_decision() 호출 중 예외 발생")
         return "hold"
+
+
+def ask_ai_parameter_tuning() -> str:
+    """최근 100개 15분봉 데이터와 현재 주요 파라미터를 GPT에 보내어
+    파라미터 조정 제안을 문자열로 받아온다."""
+    if client is None:
+        return ""
+
+    from trading_bot.data_fetcher import fetch_data_15m
+    from trading_bot.config import (
+        SMA_WINDOW,
+        ATR_WINDOW,
+        VOLUME_SPIKE_THRESHOLD,
+        RSI_OVERRIDE,
+        MACD_1H_THRESHOLD,
+        FG_EXTREME_FEAR,
+    )
+
+    df = fetch_data_15m()
+    if df is None or df.empty:
+        return ""
+
+    df_recent = df.tail(100).reset_index().rename(columns={"index": "datetime"})
+    candles_json = json.dumps(df_recent.to_dict(orient="records"), default=str)
+
+    prompt = (
+        "You are a crypto trading strategy optimizer.\n"
+        "Below is JSON for the most recent 100 15-minute candles.\n"
+        f"{candles_json}\n\n"
+        "Current parameters:\n"
+        f"SMA_WINDOW={SMA_WINDOW}\n"
+        f"ATR_WINDOW={ATR_WINDOW}\n"
+        f"VOLUME_SPIKE_THRESHOLD={VOLUME_SPIKE_THRESHOLD}\n"
+        f"RSI_OVERRIDE={RSI_OVERRIDE}\n"
+        f"MACD_1H_THRESHOLD={MACD_1H_THRESHOLD}\n"
+        f"FG_EXTREME_FEAR={FG_EXTREME_FEAR}\n\n"
+        "Suggest new parameter values in the format 'KEY=VALUE'. "
+        "If no changes are needed, answer '더 이상 변경할 사항 없음'.\n"
+        "Return only the suggestion string."
+    )
+
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-2024-08-06",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=60,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception:
+        logger.exception("ask_ai_parameter_tuning() 호출 중 예외 발생")
+        return ""
