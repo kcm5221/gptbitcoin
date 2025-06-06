@@ -11,17 +11,20 @@ from openai import OpenAI
 # ──────────────────────────────────────────────────────────────
 OPENAI_KEY = os.getenv("OPENAI_API_KEY", "")
 if not OPENAI_KEY:
-    raise RuntimeError("OPENAI_API_KEY가 설정되어 있지 않습니다. .env 파일을 확인하세요.")
+    raise RuntimeError(
+        "OPENAI_API_KEY가 설정되어 있지 않습니다. .env 파일을 확인하세요."
+    )
 
 # OpenAI 클라이언트 초기화
 client = OpenAI(api_key=OPENAI_KEY)
 
 # 그리드 탐색 결과 CSV/JSON 경로
-CSV_PATH  = "parameter_tuning_results.csv"
+CSV_PATH = "parameter_tuning_results.csv"
 JSON_PATH = "parameter_tuning_results.json"
 
 # AI 제안 결과를 저장할 파일
 OUTPUT_TXT = "ai_tuning_suggestion.txt"
+
 
 # ──────────────────────────────────────────────────────────────
 # Helper: 상위 N개 결과를 불러와 요약 JSON 반환
@@ -35,6 +38,7 @@ def load_top_results(csv_path: str, top_n: int = 10) -> list[dict]:
     df_top = df.sort_values(by="total_return_pct", ascending=False).head(top_n)
     return df_top.to_dict(orient="records")
 
+
 # ──────────────────────────────────────────────────────────────
 # Helper: 현재 성과 지표(Trade 로그 기반) 계산 (선택적)
 # ──────────────────────────────────────────────────────────────
@@ -46,7 +50,7 @@ def compute_overall_metrics(db_path: str) -> dict:
     conn = sqlite3.connect(db_path)
     df = pd.read_sql_query(
         "SELECT ts, decision, percentage, reason, btc_balance, krw_balance, avg_price, price FROM trade_log",
-        conn
+        conn,
     )
     conn.close()
 
@@ -58,26 +62,35 @@ def compute_overall_metrics(db_path: str) -> dict:
             "total_sells": 0,
             "win_rate": None,
             "avg_profit_pct": None,
-            "avg_loss_pct": None
+            "avg_loss_pct": None,
         }
 
-    sell_df["pnl_pct"] = (sell_df["price"] - sell_df["avg_price"]) / sell_df["avg_price"] * 100
+    sell_df["pnl_pct"] = (
+        (sell_df["price"] - sell_df["avg_price"]) / sell_df["avg_price"] * 100
+    )
     total_sells = len(sell_df)
     winning_sells = (sell_df["pnl_pct"] > 0).sum()
     win_rate = round(winning_sells / total_sells * 100, 2)
 
-    avg_profit_pct = round(sell_df[sell_df["pnl_pct"] > 0]["pnl_pct"].mean(), 2) \
-                     if any(sell_df["pnl_pct"] > 0) else None
-    avg_loss_pct = round(sell_df[sell_df["pnl_pct"] <= 0]["pnl_pct"].mean(), 2) \
-                   if any(sell_df["pnl_pct"] <= 0) else None
+    avg_profit_pct = (
+        round(sell_df[sell_df["pnl_pct"] > 0]["pnl_pct"].mean(), 2)
+        if any(sell_df["pnl_pct"] > 0)
+        else None
+    )
+    avg_loss_pct = (
+        round(sell_df[sell_df["pnl_pct"] <= 0]["pnl_pct"].mean(), 2)
+        if any(sell_df["pnl_pct"] <= 0)
+        else None
+    )
 
     return {
         "total_trades": len(df),
         "total_sells": total_sells,
         "win_rate": win_rate,
         "avg_profit_pct": avg_profit_pct,
-        "avg_loss_pct": avg_loss_pct
+        "avg_loss_pct": avg_loss_pct,
     }
+
 
 # ──────────────────────────────────────────────────────────────
 # 메인: AI에게 파라미터 튜닝 제안 요청
@@ -111,7 +124,7 @@ def request_ai_tuning_suggestion():
         response = client.chat.completions.create(
             model="gpt-4o-2024-08-06",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=200
+            max_tokens=200,
         )
         suggestion = response.choices[0].message.content.strip()
     except Exception as e:

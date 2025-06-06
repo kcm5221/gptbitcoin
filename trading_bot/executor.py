@@ -10,12 +10,21 @@ import requests
 
 from trading_bot.account_sync import sync_account_upbit
 from trading_bot.db_helpers import log_indicator, get_recent_trades
-from trading_bot.config import LIVE_MODE, TICKER, DISCORD_WEBHOOK, PLAY_RATIO, MIN_ORDER_KRW
+from trading_bot.config import (
+    LIVE_MODE,
+    TICKER,
+    DISCORD_WEBHOOK,
+    PLAY_RATIO,
+    MIN_ORDER_KRW,
+    BASE_RISK,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def execute_trade(ctx, buy_sig: bool, sell_sig: bool, pattern: str) -> Tuple[bool, float]:
+def execute_trade(
+    ctx, buy_sig: bool, sell_sig: bool, pattern: str
+) -> Tuple[bool, float]:
     """
     실제 주문 실행 (시장가) + 동적 포지션 사이징 (ATR 기반 리스크 관리)
     return: (executed, pct_of_equity)
@@ -26,7 +35,7 @@ def execute_trade(ctx, buy_sig: bool, sell_sig: bool, pattern: str) -> Tuple[boo
     try:
         # 매수
         if buy_sig and ctx.krw >= MIN_ORDER_KRW:
-            risk_pct = 0.01
+            risk_pct = BASE_RISK
             if ctx.atr15 > 0:
                 risk_amount = ctx.equity * risk_pct
                 max_position = (risk_amount / ctx.atr15) * ctx.atr15
@@ -43,7 +52,10 @@ def execute_trade(ctx, buy_sig: bool, sell_sig: bool, pattern: str) -> Tuple[boo
                 executed = True
                 if LIVE_MODE:
                     try:
-                        upbit = pyupbit.Upbit(os.getenv("UPBIT_ACCESS_KEY", ""), os.getenv("UPBIT_SECRET_KEY", ""))
+                        upbit = pyupbit.Upbit(
+                            os.getenv("UPBIT_ACCESS_KEY", ""),
+                            os.getenv("UPBIT_SECRET_KEY", ""),
+                        )
                         upbit.buy_market_order(TICKER, amt_krw)
                     except Exception as e:
                         logger.exception(f"Upbit 매수 주문 실패: {e}")
@@ -52,8 +64,10 @@ def execute_trade(ctx, buy_sig: bool, sell_sig: bool, pattern: str) -> Tuple[boo
                     ctx.krw -= amt_krw
                     ctx.btc += qty
                     ctx.avg_price = (
-                        ctx.avg_price * (ctx.btc - qty) + amt_krw
-                    ) / ctx.btc if ctx.btc else ctx.price
+                        (ctx.avg_price * (ctx.btc - qty) + amt_krw) / ctx.btc
+                        if ctx.btc
+                        else ctx.price
+                    )
                 pct_used = amt_krw / ctx.equity * 100
 
         # 매도
@@ -64,7 +78,10 @@ def execute_trade(ctx, buy_sig: bool, sell_sig: bool, pattern: str) -> Tuple[boo
                 executed = True
                 if LIVE_MODE:
                     try:
-                        upbit = pyupbit.Upbit(os.getenv("UPBIT_ACCESS_KEY", ""), os.getenv("UPBIT_SECRET_KEY", ""))
+                        upbit = pyupbit.Upbit(
+                            os.getenv("UPBIT_ACCESS_KEY", ""),
+                            os.getenv("UPBIT_SECRET_KEY", ""),
+                        )
                         upbit.sell_market_order(TICKER, qty)
                     except Exception as e:
                         logger.exception(f"Upbit 매도 주문 실패: {e}")
@@ -87,7 +104,9 @@ def execute_trade(ctx, buy_sig: bool, sell_sig: bool, pattern: str) -> Tuple[boo
     return executed, pct_used
 
 
-def log_and_notify(ctx, buy_sig: bool, sell_sig: bool, pattern: str, executed: bool, pct_used: float):
+def log_and_notify(
+    ctx, buy_sig: bool, sell_sig: bool, pattern: str, executed: bool, pct_used: float
+):
     """
     - 지표 로그를 DB에 기록
     - (중복 방지를 위해) 매매 로그는 main.py에서 이미 기록했으므로 여기서는 생략
@@ -97,9 +116,7 @@ def log_and_notify(ctx, buy_sig: bool, sell_sig: bool, pattern: str, executed: b
     try:
         # 1) 지표 로그
         log_indicator(
-            ts,
-            ctx.sma30, ctx.atr15, ctx.vol20,
-            ctx.macd, ctx.price, ctx.fear_idx
+            ts, ctx.sma30, ctx.atr15, ctx.vol20, ctx.macd, ctx.price, ctx.fear_idx
         )
     except Exception as e:
         logger.exception(f"log_indicator() 예외 발생: {e}")
@@ -107,8 +124,13 @@ def log_and_notify(ctx, buy_sig: bool, sell_sig: bool, pattern: str, executed: b
     # ── 여기서 log_trade 호출을 제거하고, Discord 알림만 수행 ────────────────────────
     logger.info(
         "Executed=%s pct=%.2f mode=%s | Pattern=%s | Equity=%.0f | KRW=%.0f | BTC=%.6f",
-        executed, pct_used, ("live" if LIVE_MODE else "virtual"),
-        pattern or "none", ctx.equity, ctx.krw, ctx.btc
+        executed,
+        pct_used,
+        ("live" if LIVE_MODE else "virtual"),
+        pattern or "none",
+        ctx.equity,
+        ctx.krw,
+        ctx.btc,
     )
 
     if not DISCORD_WEBHOOK:
@@ -144,7 +166,9 @@ def log_and_notify(ctx, buy_sig: bool, sell_sig: bool, pattern: str, executed: b
         if resp.status_code in (200, 204):
             logger.info(f"Discord POST 성공: {resp.status_code}")
         else:
-            logger.error(f"Discord POST 실패: 상태코드={resp.status_code}, 응답={resp.text}")
+            logger.error(
+                f"Discord POST 실패: 상태코드={resp.status_code}, 응답={resp.text}"
+            )
 
     except Exception as e:
         logger.exception(f"Discord Webhook 호출 중 예외 발생: {e}")
