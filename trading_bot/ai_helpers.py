@@ -109,7 +109,8 @@ def ask_ai_reflection(
         f"Recent trades: {df.to_json(orient='records')}\n"
         f"Recent candles: {chart_json}\n"
         f"Fear-Greed index={fear_idx}\n"
-        "Respond in ≤120 words: what worked, what didn't, one improvement."
+        "Respond in ≤120 words: what worked, what didn't, one improvement.\n"
+        "Include strategy tweaks using KEY=VALUE format (one per line)."
     )
 
     try:

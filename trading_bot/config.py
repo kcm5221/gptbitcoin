@@ -2,6 +2,8 @@
 
 from dotenv import load_dotenv
 
+# 환경 변수는 .env 파일에서 로드합니다
+
 load_dotenv(".env")
 
 import os
