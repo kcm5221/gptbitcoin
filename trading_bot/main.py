@@ -27,6 +27,7 @@ from trading_bot.db_helpers import (
     log_reflection,
     has_indicator,
     get_recent_trades,
+    get_last_reflection_ts,
 )
 from trading_bot.utils import get_fear_and_greed
 from trading_bot.config import (
@@ -37,6 +38,7 @@ from trading_bot.config import (
     RSI_OVERRIDE,
     MACD_1H_THRESHOLD,
     FG_EXTREME_FEAR,
+    REFLECTION_INTERVAL_SEC,
 )
 
 # 디버그 로그가 보이도록 레벨을 DEBUG로 설정
@@ -104,6 +106,15 @@ def ai_trading():
 
     # 5-1) 공포·탐욕 지수 가져오기 (캐시 기반 최대 하루 1회)
     fear_idx = get_fear_and_greed() or 0
+
+    # 5-2) 반성문 주기 도래 여부 계산
+    now = time.time()
+    try:
+        last_reflection = get_last_reflection_ts()
+    except Exception as e:
+        logger.exception("get_last_reflection_ts 예외: %s", e)
+        last_reflection = 0.0
+    should_reflect = now - last_reflection >= REFLECTION_INTERVAL_SEC
 
     equity = krw + btc * price
 
@@ -175,12 +186,16 @@ def ai_trading():
     buy_sig, sell_sig, pattern = check_rule_patterns(ctx)
     logger.info(f"8) 룰 패턴 결과: buy={buy_sig}, sell={sell_sig}, pattern={pattern}")
 
-    # 9) AI 복합 패턴 (룰 기반 신호 없을 때)
-    if not (buy_sig or sell_sig):
+    # 9) AI 복합 패턴 (룰 기반 신호 없을 때, 반성문 시점에만 실행)
+    if not (buy_sig or sell_sig) and should_reflect:
         buy_ai, sell_ai, pat_ai = check_ai_patterns(ctx)
         if buy_ai or sell_ai:
             buy_sig, sell_sig, pattern = buy_ai, sell_ai, pat_ai
-        logger.info(f"9) AI 패턴 결과: buy={buy_ai}, sell={sell_ai}, pattern={pat_ai}")
+        logger.info(
+            f"9) AI 패턴 결과: buy={buy_ai}, sell={sell_ai}, pattern={pat_ai}"
+        )
+    elif not should_reflect:
+        logger.info("9) AI 패턴 스킵: 반성문 주기가 아직 되지 않음")
 
     # 10) 보조 전략 A (룰/AI 신호 없을 때)
     if not (buy_sig or sell_sig):
@@ -222,43 +237,34 @@ def ai_trading():
     executed, pct_used = execute_trade(ctx, buy_sig, sell_sig, pattern)
     logger.info(f"12) execute_trade() 결과: executed={executed}, pct={pct_used:.2f}%")
 
-    # ── “AI 반성문”은 매매(executed=True) 시에만 생성/저장 ──────────────────────────
+    # ── "AI 반성문"은 매매 여부와 무관하게 주기적으로 실행 ───────────────────
     reflection_id = 0
-    if executed:
+    if should_reflect:
         try:
-            from trading_bot.config import REFLECTION_INTERVAL_SEC
-            from trading_bot.db_helpers import get_last_reflection_ts
+            recent_trades = get_recent_trades(limit=20)
+            from trading_bot.ai_helpers import ask_ai_reflection, apply_to_env
 
-            last_ts = get_last_reflection_ts()
-            now = time.time()
-            if now - last_ts >= REFLECTION_INTERVAL_SEC:
-                recent_trades = get_recent_trades(limit=20)
-                from trading_bot.ai_helpers import ask_ai_reflection, apply_to_env
-
-                chart_recent = ctx.df_15m.tail(100)
-                reflection_text, updates = ask_ai_reflection(
-                    recent_trades,
-                    ctx.fear_idx,
-                    chart_recent,
-                    recursive=True,
-                )
-                if reflection_text:
-                    reflection_id = log_reflection(time.time(), reflection_text)
-                    logger.info(f"반성문 저장 완료 (reflection_id={reflection_id})")
-                if updates:
-                    apply_to_env(updates)
-                    logger.info(f".env 업데이트: {updates}")
-            else:
-                logger.info(
-                    "반성문 건너뜀: 마지막 작성 이후 %.1f시간 미만",
-                    REFLECTION_INTERVAL_SEC / 3600,
-                )
+            chart_recent = ctx.df_15m.tail(100)
+            reflection_text, updates = ask_ai_reflection(
+                recent_trades,
+                ctx.fear_idx,
+                chart_recent,
+                recursive=True,
+            )
+            if reflection_text:
+                reflection_id = log_reflection(time.time(), reflection_text)
+                logger.info(f"반성문 저장 완료 (reflection_id={reflection_id})")
+            if updates:
+                apply_to_env(updates)
+                logger.info(f".env 업데이트: {updates}")
         except Exception as e:
             logger.exception(f"반성문 생성/저장 중 예외 발생: {e}")
             reflection_id = 0
     else:
-        logger.info("반성문 생성 생략: 매매가 이뤄지지 않음")
-
+        logger.info(
+            "반성문 건너뜀: 마지막 작성 이후 %.1f시간 미만",
+            REFLECTION_INTERVAL_SEC / 3600,
+        )
     # ── trade_log 기록 (반성문 ID 포함) ─────────────────────────────────────────────
     log_trade(
         time.time(),
@@ -274,10 +280,6 @@ def ai_trading():
         reflection_id,
     )
 
-    # ── indicator_log에도 FNG 저장 ─────────────────────────────────────────────────
-    log_indicator(
-        time.time(), ctx.sma30, ctx.atr15, ctx.vol20, ctx.macd, ctx.price, ctx.fear_idx
-    )
 
     # ── Discord 알림 호출 ───────────────────────────────────────────────────────────
     log_and_notify(ctx, buy_sig, sell_sig, pattern, executed, pct_used)
