@@ -9,7 +9,11 @@ import pyupbit
 import requests
 
 from trading_bot.account_sync import sync_account_upbit
-from trading_bot.db_helpers import log_indicator, get_recent_trades
+from trading_bot.db_helpers import (
+    log_indicator,
+    get_recent_trades,
+    save_account,
+)
 from trading_bot.config import (
     LIVE_MODE,
     TICKER,
@@ -38,7 +42,7 @@ def execute_trade(
             risk_pct = BASE_RISK
             if ctx.atr15 > 0:
                 risk_amount = ctx.equity * risk_pct
-                max_position = (risk_amount / ctx.atr15) * ctx.atr15
+                max_position = (risk_amount / ctx.atr15) * ctx.price
                 max_position = min(max_position, ctx.equity * PLAY_RATIO)
                 amt_krw = max(int(max_position), MIN_ORDER_KRW)
             else:
@@ -95,6 +99,8 @@ def execute_trade(
         if LIVE_MODE and executed:
             new_krw, new_btc, new_avg = sync_account_upbit()
             ctx.krw, ctx.btc, ctx.avg_price = new_krw, new_btc, new_avg
+        elif executed:
+            save_account(ctx.krw, ctx.btc, ctx.avg_price)
 
     except Exception as e:
         logger.exception(f"execute_trade() 예외 발생: {e}")
