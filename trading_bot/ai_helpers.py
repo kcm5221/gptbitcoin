@@ -139,6 +139,22 @@ def ask_ai_reflection(
                 reflection = improved
 
         params = parse_env_suggestions(reflection)
+
+        tries = 0
+        while not params and tries < 2:
+            follow_up = (
+                "The previous reflection lacked KEY=VALUE tweaks. "
+                "Provide at least one KEY=VALUE line."
+            )
+            resp = client.chat.completions.create(
+                model="gpt-4o-2024-08-06",
+                messages=[{"role": "user", "content": follow_up}],
+                max_tokens=150,
+            )
+            reflection = resp.choices[0].message.content.strip()
+            params = parse_env_suggestions(reflection)
+            tries += 1
+
         result = (reflection, params)
         _reflection_cache.set(key, result)
         return result
