@@ -4,7 +4,13 @@ import pandas as pd
 import logging
 from typing import Optional
 
-from trading_bot.data_io import load_cached_ohlcv, save_cached_ohlcv, safe_ohlcv, fetch_direct
+import pyupbit
+from trading_bot.data_io import (
+    load_cached_ohlcv,
+    save_cached_ohlcv,
+    safe_ohlcv,
+    fetch_ohlcv_1h_via_rest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +50,18 @@ def fetch_data_1h(ticker: str, count: int = 100) -> Optional[pd.DataFrame]:
     실패 시 None 반환.
     """
     try:
-        df = fetch_direct()  # fetch_direct 내부에서 pyupbit도 호출함
-        if df is not None and not df.empty:
-            return df
+        df = pyupbit.get_ohlcv(ticker, interval="minute60", count=count)
+        if df is None or df.empty:
+            raise RuntimeError("pyupbit.get_ohlcv 빈 데이터")
+        return df[["open", "high", "low", "close", "volume"]]
+    except Exception:
+        logger.warning("pyupbit.get_ohlcv 실패 → REST 백업 시도")
+        try:
+            df = fetch_ohlcv_1h_via_rest(ticker, count)
+            if df is not None and not df.empty:
+                return df
+        except Exception:
+            logger.exception("fetch_ohlcv_1h_via_rest 실패")
 
         logger.error("fetch_data_1h: 데이터 없음, None 반환")
-        return None
-
-    except Exception as e:
-        logger.exception(f"fetch_data_1h() 예외 발생: {e}")
         return None
