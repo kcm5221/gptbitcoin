@@ -191,18 +191,27 @@ def apply_to_env(params: dict, env_file: str = ".env") -> None:
             with open(env_file, "r", encoding="utf-8") as f:
                 lines = f.readlines()
 
-        with open(env_file, "w", encoding="utf-8") as f:
+        dirpath = os.path.dirname(env_file) or "."
+        with tempfile.NamedTemporaryFile("w", dir=dirpath, delete=False, encoding="utf-8") as tmpf:
             written = set()
             for line in lines:
                 key = line.split("=", 1)[0].strip()
                 if key in params:
-                    f.write(f"{key}={params[key]}\n")
+                    tmpf.write(f"{key}={params[key]}\n")
                     written.add(key)
                 else:
-                    f.write(line)
+                    tmpf.write(line)
             for k, v in params.items():
                 if k not in written:
-                    f.write(f"{k}={v}\n")
+                    tmpf.write(f"{k}={v}\n")
+            tmp_name = tmpf.name
+
+        with open(env_file, "a+b") as f_lock:
+            try:
+                fcntl.flock(f_lock, fcntl.LOCK_EX)
+            except IOError:
+                logger.warning("apply_to_env: 파일 잠금 실패")
+            os.replace(tmp_name, env_file)
     except Exception:
         logger.exception("apply_to_env() 호출 중 예외 발생")
 
