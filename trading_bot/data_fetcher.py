@@ -9,6 +9,7 @@ from trading_bot.data_io import (
     load_cached_ohlcv,
     save_cached_ohlcv,
     safe_ohlcv,
+    fetch_direct,
     fetch_ohlcv_1h_via_rest,
 )
 
