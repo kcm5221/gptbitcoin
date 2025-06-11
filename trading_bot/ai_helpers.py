@@ -148,9 +148,17 @@ def ask_ai_reflection(
 
 
 def parse_env_suggestions(text: str) -> dict:
-    """Extract KEY=VALUE suggestions from reflection text."""
-    matches = re.findall(r"([A-Z_]+)\s*=\s*([0-9\.]+)", text)
-    return {m[0]: m[1] for m in matches}
+    """Extract ``KEY=VALUE`` suggestions from reflection text.
+
+    숫자 뿐만 아니라 ``true``/``false`` 값도 허용한다.
+    대소문자는 무시하며, 키는 항상 대문자로 변환한다.
+    """
+    pattern = r"([A-Z_]+)\s*=\s*([-+]?\d*\.?\d+|true|false)"
+    matches = re.findall(pattern, text, flags=re.IGNORECASE)
+    result = {}
+    for key, val in matches:
+        result[key.upper()] = val.lower() if val.lower() in {"true", "false"} else val
+    return result
 
 
 def apply_to_env(params: dict, env_file: str = ".env") -> None:
