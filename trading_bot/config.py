@@ -55,7 +55,6 @@ INITIAL_KRW = float(os.getenv("INITIAL_KRW", "30000.0"))
 # 3) “Fear & Greed” 지수 임계치
 FG_BUY_TH = int(os.getenv("FG_BUY_TH", "40"))
 FG_SELL_TH = int(os.getenv("FG_SELL_TH", "70"))
-FG_EXTREME_FEAR = int(os.getenv("FG_EXTREME_FEAR", "50"))
 
 # 4) 전략 관련 파라미터
 
