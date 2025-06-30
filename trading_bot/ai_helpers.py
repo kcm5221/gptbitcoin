@@ -194,6 +194,11 @@ def ask_ai_reflection(
             params = parse_env_suggestions(reflection)
             tries += 1
 
+        if not params:
+            logger.warning(
+                "No KEY=VALUE suggestions after retries; keeping defaults."
+            )
+
         result = (reflection, params)
         _reflection_cache.set(key, result)
         _save_reflection_cache()
