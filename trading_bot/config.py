@@ -111,3 +111,5 @@ FG_EXTREME_FEAR = float(_raw.split("#", 1)[0].strip())
 # 7) AI 반성문 관련 설정
 REFLECTION_INTERVAL_HOURS = float(os.getenv("REFLECTION_INTERVAL_HOURS", "11"))
 REFLECTION_INTERVAL_SEC = int(REFLECTION_INTERVAL_HOURS * 3600)
+# AI 리플렉션을 GPT에게 한 번 더 개선 요청할지 여부 (기본 true)
+REFLECTION_RECURSIVE = os.getenv("REFLECTION_RECURSIVE", "true").lower() == "true"

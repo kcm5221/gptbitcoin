@@ -164,7 +164,7 @@ def ask_ai_reflection(
         )
         reflection = resp.choices[0].message.content.strip()
 
-        if recursive:
+        if recursive and max_iter > 1:
             for _ in range(max_iter - 1):
                 follow = (
                     "Here is your previous reflection:\n"
