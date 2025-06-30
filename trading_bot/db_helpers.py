@@ -224,3 +224,20 @@ def has_indicator(conn: sqlite3.Connection, ts: float) -> bool:
     except Exception as e:
         logger.exception(f"has_indicator: 예외 발생: {e}")
         return False
+
+
+@with_db
+def prune_old_logs(conn: sqlite3.Connection, max_rows: int) -> None:
+    """Trim log tables to at most ``max_rows`` rows."""
+    try:
+        for table in ("indicator_log", "trade_log", "reflection_log"):
+            cur = conn.execute(f"SELECT COUNT(*) as cnt FROM {table}")
+            count = cur.fetchone()["cnt"]
+            if count > max_rows:
+                excess = count - max_rows
+                conn.execute(
+                    f"DELETE FROM {table} WHERE id IN (SELECT id FROM {table} ORDER BY id ASC LIMIT ?)",
+                    (excess,),
+                )
+    except Exception as e:
+        logger.exception(f"prune_old_logs: 예외 발생: {e}")
