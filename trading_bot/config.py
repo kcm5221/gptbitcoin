@@ -115,3 +115,6 @@ REFLECTION_RECURSIVE = os.getenv("REFLECTION_RECURSIVE", "true").lower() == "tru
 
 # 8) 데이터베이스 로그 보존 최대 행 수
 LOG_RETENTION_ROWS = int(os.getenv("LOG_RETENTION_ROWS", "5000"))
+
+# 오래된 로그 정리 후 VACUUM을 실행할지 여부 (기본 true)
+ENABLE_DB_VACUUM = os.getenv("ENABLE_DB_VACUUM", "true").lower() == "true"
