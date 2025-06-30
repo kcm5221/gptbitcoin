@@ -13,7 +13,7 @@ from openai import OpenAI
 import requests
 import fcntl
 
-from trading_bot.config import PATTERN_HISTORY_FILE
+from trading_bot.config import PATTERN_HISTORY_FILE, REFLECTION_CACHE_FILE
 
 logger = logging.getLogger(__name__)
 OPENAI_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -52,6 +52,49 @@ _noise_filter_cache = TTLCache(ttl_sec=30.0)
 # (4) ask_ai_reflection 캐시: 같은 최근 20개 트레이드 + fear_idx 조합을
 # 39600초(약 11시간)간 재사용
 _reflection_cache = TTLCache(ttl_sec=39600.0)
+
+
+def _load_reflection_cache() -> None:
+    """Load reflection cache from disk if present."""
+    if not REFLECTION_CACHE_FILE.exists():
+        return
+    try:
+        with open(REFLECTION_CACHE_FILE, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        if isinstance(raw, dict):
+            for k_str, entry in raw.items():
+                if not isinstance(entry, list) or len(entry) != 2:
+                    continue
+                ts, value = entry
+                try:
+                    key = tuple(json.loads(k_str))
+                except Exception:
+                    continue
+                _reflection_cache.store[key] = (ts, value)
+    except Exception:
+        logger.warning("_load_reflection_cache 실패")
+
+
+def _save_reflection_cache() -> None:
+    """Persist reflection cache to disk."""
+    try:
+        os.makedirs(REFLECTION_CACHE_FILE.parent, exist_ok=True)
+        data = {
+            json.dumps(k): [ts, v]
+            for k, (ts, v) in _reflection_cache.store.items()
+        }
+        dirpath = REFLECTION_CACHE_FILE.parent
+        with tempfile.NamedTemporaryFile(
+            "w", dir=dirpath, delete=False, encoding="utf-8"
+        ) as tmpf:
+            json.dump(data, tmpf)
+            tmp_name = tmpf.name
+        os.replace(tmp_name, REFLECTION_CACHE_FILE)
+    except Exception:
+        logger.warning("_save_reflection_cache 실패")
+
+
+_load_reflection_cache()
 
 
 def _df_hashable_key(df: pd.DataFrame, rows: int = 10) -> str:
@@ -157,6 +200,7 @@ def ask_ai_reflection(
 
         result = (reflection, params)
         _reflection_cache.set(key, result)
+        _save_reflection_cache()
         return result
     except Exception:
         logger.exception("ask_ai_reflection() 호출 중 예외 발생")

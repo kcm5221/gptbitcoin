@@ -28,8 +28,10 @@ gptbitcoin/
 ├── strategies.py # 보조 전략 A/B (볼륨+SMA, EMA 크로스 등)
 ├── utils.py # 공통 유틸리티 (캐시 로드, 계좌 로드, FNG 등)
 ├── data/ # 데이터·캐시 폴더
-│ ├── ohlcv_cache.json # 15분봉 OHLCV 캐시 파일
-│ └── trading.db # SQLite 거래 로그 (indicator_log, trade_log, account 등)
+│ ├── ohlcv_cache.json       # 15분봉 OHLCV 캐시 파일
+│ ├── fng_cache.json         # Fear & Greed 지수 캐시
+│ ├── reflection_cache.json  # AI 반성문 캐시
+│ └── trading.db             # SQLite 거래 로그 (indicator_log, trade_log, account 등)
 └── logs/ # 자동매매 시 생성되는 로그 파일들
 ```
 ---
@@ -86,7 +88,7 @@ gptbitcoin/
 4. **데이터베이스 & 캐시 초기화**
 
     - 첫 실행 시 `trading_bot/config.py` 에서 지정한 경로(기본 `trading_bot/data/trading.db`)에 DB 파일이 자동 생성됩니다.
-    - 마찬가지로 `ohlcv_cache.json`도 같은 폴더(예: `trading_bot/data/ohlcv_cache.json`)에 저장됩니다.
+    - `ohlcv_cache.json`, `fng_cache.json`, `reflection_cache.json` 파일도 같은 폴더에 순차적으로 생성됩니다.
 
 5. **자동매매 스크립트 실행**
 
@@ -98,7 +100,7 @@ gptbitcoin/
        ```
 
        - `--mode intraday` 옵션은 인트라데이(15분봉 + 1시간봉) 모드로 실행합니다.
-       - 첫 실행 후 DB (`trading.db`)와 캐시(`ohlcv_cache.json`)가 생성됩니다.
+       - 첫 실행 후 DB(`trading.db`)와 각종 캐시(`ohlcv_cache.json`, `fng_cache.json`, `reflection_cache.json`)가 생성됩니다.
        - 성공적으로 실행되면 콘솔과 `trading_bot/logs/`에 로그가 기록되고,  
          실거래 모드(`LIVE_MODE=true`)에서는 Discord 알림이 발송됩니다.
 
