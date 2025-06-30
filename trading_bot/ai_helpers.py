@@ -43,13 +43,9 @@ class TTLCache:
         self.store[key] = (time.time(), value)
 
 
-# (1) ask_candle_patterns 캐시: 동일 데이터(마지막 100봉)를 60초간 재사용
-_candle_patterns_cache = TTLCache(ttl_sec=60.0)
-# (2) ask_pattern_decision 캐시: 동일 패턴 이름 + 최근 10봉 해시를 300초(5분)간 재사용
+# (1) ask_pattern_decision 캐시: 동일 패턴 이름 + 최근 10봉 해시를 300초(5분)간 재사용
 _pattern_decision_cache = TTLCache(ttl_sec=300.0)
-# (3) ask_noise_filter 캐시: 동일 5봉 데이터 해시를 30초간 재사용
-_noise_filter_cache = TTLCache(ttl_sec=30.0)
-# (4) ask_ai_reflection 캐시: 같은 최근 20개 트레이드 + fear_idx 조합을
+# (2) ask_ai_reflection 캐시: 같은 최근 20개 트레이드 + fear_idx 조합을
 # 39600초(약 11시간)간 재사용
 _reflection_cache = TTLCache(ttl_sec=39600.0)
 
@@ -343,7 +339,6 @@ def ask_candle_patterns(df_recent: pd.DataFrame) -> Optional[List[Dict[str, Any]
     최근 15분봉 DataFrame(예: 100봉)을 AI에게 보내어,
     복합 차트 패턴을 자동으로 태깅한 결과를 JSON으로 반환.
     - 최소 100봉 이상일 때만 호출
-    - 60초 TTL 캐시 적용
     - 코드 블록 제거는 정규표현식으로 처리
     """
     if client is None:
@@ -353,9 +348,6 @@ def ask_candle_patterns(df_recent: pd.DataFrame) -> Optional[List[Dict[str, Any]
         return None
 
     key = ("candle_patterns", _df_hashable_key(df_recent))
-    cached = _candle_patterns_cache.get(key)
-    if cached is not None:
-        return cached
 
     df_for_ai = df_recent.reset_index().rename(columns={"index": "datetime"})
     records = df_for_ai.to_dict(orient="records")
@@ -387,7 +379,6 @@ def ask_candle_patterns(df_recent: pd.DataFrame) -> Optional[List[Dict[str, Any]
 
         try:
             patterns = json.loads(raw)
-            _candle_patterns_cache.set(key, patterns)
             return patterns
         except Exception:
             logger.exception(f"ask_candle_patterns: JSON 파싱 오류, 원본 응답: {raw}")
@@ -402,15 +393,11 @@ def ask_noise_filter(df_last5: pd.DataFrame) -> Optional[bool]:
     """
     최근 5봉 DataFrame을 AI에게 보여주어, 마지막 봉이 노이즈인지 판단.
     - 볼륨 감소가 (평균볼륨 × 0.10 이하)일 때만 AI 호출
-    - 30초 TTL 캐시 적용
     """
     if client is None:
         return False
 
     key = ("noise_filter", _df_hashable_key(df_last5))
-    cached = _noise_filter_cache.get(key)
-    if cached is not None:
-        return cached
 
     records = df_last5.to_dict(orient="records")
     data_json = json.dumps(records, default=str)
@@ -433,7 +420,6 @@ def ask_noise_filter(df_last5: pd.DataFrame) -> Optional[bool]:
         )
         answer = resp.choices[0].message.content.strip().lower()
         is_noise = answer.startswith("yes")
-        _noise_filter_cache.set(key, is_noise)
         return is_noise
     except Exception:
         logger.exception("ask_noise_filter() 호출 중 예외 발생")
