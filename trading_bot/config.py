@@ -18,11 +18,16 @@ DATA_DIR.mkdir(exist_ok=True)
 
 DB_FILE = DATA_DIR / "trading.db"
 CACHE_FILE = DATA_DIR / "ohlcv_cache.json"
+# 로그 디렉터리
 LOG_DIR = PROJECT_ROOT / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 
 # 패턴 히스토리 저장 파일 (ai_helpers.py에서 사용)
 PATTERN_HISTORY_FILE = DATA_DIR / "pattern_history.json"
+# FNG 지수 캐시 파일 (utils.py에서 사용)
+FNG_CACHE_FILE = DATA_DIR / "fng_cache.json"
+# AI 반성문 캐시 파일 (ai_helpers.py에서 사용)
+REFLECTION_CACHE_FILE = DATA_DIR / "reflection_cache.json"
 # ──────────────────────────────────────────────────────────────────────
 
 # 1) 기본 환경 변수
