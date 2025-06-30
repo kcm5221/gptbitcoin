@@ -13,7 +13,11 @@ from openai import OpenAI
 import requests
 import fcntl
 
-from trading_bot.config import PATTERN_HISTORY_FILE, REFLECTION_CACHE_FILE
+from trading_bot.config import (
+    PATTERN_HISTORY_FILE,
+    REFLECTION_CACHE_FILE,
+    REFLECTION_KV_RETRY,
+)
 
 logger = logging.getLogger(__name__)
 OPENAI_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -180,7 +184,7 @@ def ask_ai_reflection(
         params = parse_env_suggestions(reflection)
 
         tries = 0
-        while not params and tries < 2:
+        while not params and tries < REFLECTION_KV_RETRY:
             follow_up = (
                 "The previous reflection lacked KEY=VALUE tweaks. "
                 "Provide at least one KEY=VALUE line."
