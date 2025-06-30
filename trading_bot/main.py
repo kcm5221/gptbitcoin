@@ -39,6 +39,7 @@ from trading_bot.config import (
     MACD_1H_THRESHOLD,
     FG_EXTREME_FEAR,
     REFLECTION_INTERVAL_SEC,
+    REFLECTION_RECURSIVE,
 )
 
 # 디버그 로그가 보이도록 레벨을 DEBUG로 설정
@@ -249,7 +250,7 @@ def ai_trading():
                 recent_trades,
                 ctx.fear_idx,
                 chart_recent,
-                recursive=True,
+                recursive=REFLECTION_RECURSIVE,
             )
             if reflection_text:
                 reflection_id = log_reflection(time.time(), reflection_text)

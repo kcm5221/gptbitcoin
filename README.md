@@ -80,6 +80,7 @@ gptbitcoin/
     CACHE_TTL=3600
     FG_CACHE_TTL=82800
     REFLECTION_INTERVAL_HOURS=11
+    REFLECTION_RECURSIVE=true
     BASE_RISK=0.02
     ```
 
@@ -212,11 +213,13 @@ gptbitcoin/
    - 새 반성문은 마지막 작성 이후 `REFLECTION_INTERVAL_HOURS`(기본 11시간) 이상
      지나야만 저장되며, 매매가 없더라도 주기적으로 실행됩니다.
 
-   - 프롬프트는 반드시 `KEY=VALUE` 형식의 전략 조정안을 포함하도록 명시하며,
-     이 형식이 감지되면 `.env` 파일에 자동 반영해 전략 수치를 업데이트합니다.
-   - 만약 반성문에 `KEY=VALUE` 줄이 없을 경우, 최소 한 줄을 얻을 때까지 한 번 더
-     재요청합니다.
-     값은 숫자나 `true`/`false` 등 대부분의 기본 타입을 인식합니다.
+    - 프롬프트는 반드시 `KEY=VALUE` 형식의 전략 조정안을 포함하도록 명시하며,
+      이 형식이 감지되면 `.env` 파일에 자동 반영해 전략 수치를 업데이트합니다.
+    - 만약 반성문에 `KEY=VALUE` 줄이 없을 경우, 최소 한 줄을 얻을 때까지 한 번 더
+      재요청합니다.
+      값은 숫자나 `true`/`false` 등 대부분의 기본 타입을 인식합니다.
+    - 기본적으로 GPT에게 한 차례 추가 개선을 요청하지만,
+      `REFLECTION_RECURSIVE=false`로 설정하면 첫 응답만 사용합니다.
 
 
 ## 🛡️ 보안 주의 사항
