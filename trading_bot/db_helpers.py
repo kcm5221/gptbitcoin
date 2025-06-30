@@ -3,7 +3,7 @@ import logging
 from typing import Any, Callable
 import pandas as pd
 
-from trading_bot.config import DB_FILE, INITIAL_KRW
+from trading_bot.config import DB_FILE, INITIAL_KRW, ENABLE_DB_VACUUM
 
 logger = logging.getLogger(__name__)
 
@@ -227,8 +227,18 @@ def has_indicator(conn: sqlite3.Connection, ts: float) -> bool:
 
 
 @with_db
+def vacuum_db(conn: sqlite3.Connection) -> None:
+    """Run WAL checkpoint and vacuum to reclaim space."""
+    try:
+        conn.executescript("PRAGMA wal_checkpoint; VACUUM;")
+    except Exception as e:
+        logger.exception(f"vacuum_db: 예외 발생: {e}")
+
+
+@with_db
 def prune_old_logs(conn: sqlite3.Connection, max_rows: int) -> None:
     """Trim log tables to at most ``max_rows`` rows."""
+    deleted = False
     try:
         for table in ("indicator_log", "trade_log", "reflection_log"):
             cur = conn.execute(f"SELECT COUNT(*) as cnt FROM {table}")
@@ -239,5 +249,9 @@ def prune_old_logs(conn: sqlite3.Connection, max_rows: int) -> None:
                     f"DELETE FROM {table} WHERE id IN (SELECT id FROM {table} ORDER BY id ASC LIMIT ?)",
                     (excess,),
                 )
+                deleted = True
+        if deleted and ENABLE_DB_VACUUM:
+            conn.commit()
+            vacuum_db()
     except Exception as e:
         logger.exception(f"prune_old_logs: 예외 발생: {e}")
