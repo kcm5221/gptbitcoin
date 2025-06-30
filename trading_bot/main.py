@@ -3,6 +3,7 @@
 
 import argparse
 import logging
+from logging.handlers import RotatingFileHandler
 import time
 
 import pandas as pd
@@ -28,6 +29,7 @@ from trading_bot.db_helpers import (
     has_indicator,
     get_recent_trades,
     get_last_reflection_ts,
+    prune_old_logs,
 )
 from trading_bot.utils import get_fear_and_greed
 from trading_bot.config import (
@@ -40,11 +42,19 @@ from trading_bot.config import (
     FG_EXTREME_FEAR,
     REFLECTION_INTERVAL_SEC,
     REFLECTION_RECURSIVE,
+    LOG_DIR,
+    LOG_RETENTION_ROWS,
 )
 
 # 디버그 로그가 보이도록 레벨을 DEBUG로 설정
+log_file = LOG_DIR / "cron.log"
 logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s"
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        RotatingFileHandler(log_file, maxBytes=1_000_000, backupCount=5),
+        logging.StreamHandler(),
+    ],
 )
 
 logger = logging.getLogger(__name__)
@@ -55,7 +65,8 @@ def ai_trading():
 
     # 1) DB 초기화
     init_db()
-    logger.info("1) DB 초기화 완료")
+    prune_old_logs(LOG_RETENTION_ROWS)
+    logger.info("1) DB 초기화 완료 및 로그 정리")
 
     # 2) 15분봉 + 1시간봉 데이터 로드
     df_15m = fetch_data_15m()

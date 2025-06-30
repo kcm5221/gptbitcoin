@@ -112,3 +112,6 @@ REFLECTION_INTERVAL_HOURS = float(os.getenv("REFLECTION_INTERVAL_HOURS", "11"))
 REFLECTION_INTERVAL_SEC = int(REFLECTION_INTERVAL_HOURS * 3600)
 # AI 리플렉션을 GPT에게 한 번 더 개선 요청할지 여부 (기본 true)
 REFLECTION_RECURSIVE = os.getenv("REFLECTION_RECURSIVE", "true").lower() == "true"
+
+# 8) 데이터베이스 로그 보존 최대 행 수
+LOG_RETENTION_ROWS = int(os.getenv("LOG_RETENTION_ROWS", "5000"))
