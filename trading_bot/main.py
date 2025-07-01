@@ -70,6 +70,9 @@ def ai_trading():
 
     # 2) 15분봉 + 1시간봉 데이터 로드
     df_15m = fetch_data_15m()
+    if df_15m is None or df_15m.empty:
+        logger.error("15분봉 데이터 로드 실패 → 종료")
+        return
     logger.info(f"2) 15분봉 데이터 로드 완료 (count={len(df_15m)})")
     df_1h_raw = fetch_data_1h(TICKER, count=100)
     if df_1h_raw is not None:
