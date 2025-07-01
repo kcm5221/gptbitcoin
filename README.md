@@ -161,10 +161,10 @@ gptbitcoin/
    - `trading_bot/account_sync.py`에서 Upbit API(`Upbit.get_balances`)를 호출해  
      실계좌 KRW, BTC, 평균 매수가를 가져옵니다.
 
-3. **OHLCV 캐시 & REST 백업**  
-   - `trading_bot/data_fetcher.py`에선  
-     1) `load_cached_ohlcv()` → 캐시가 없거나 TTL(`CACHE_TTL`초)이 지났으면  
-     2) `pyupbit.get_ohlcv()` → 실패 시 백업 REST API(`fetch_direct()`) 순으로 호출합니다.
+3. **OHLCV 캐시 & REST 백업**
+   - `trading_bot/data_fetcher.py`에서
+     1) `trading_bot.data_io.load_cached_ohlcv()`로 캐시를 시도하고
+     2) 실패 시 `pyupbit.get_ohlcv()` → 백업 REST API(`fetch_direct()`) 순으로 호출합니다.
 
 4. **지표 계산**  
    - **15분봉 지표** (`trading_bot/indicators_common.py`):  

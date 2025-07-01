@@ -5,15 +5,69 @@ import logging
 from typing import Optional
 
 import pyupbit
+import requests
 from trading_bot.data_io import (
     load_cached_ohlcv,
     save_cached_ohlcv,
-    safe_ohlcv,
-    fetch_direct,
-    fetch_ohlcv_1h_via_rest,
 )
+from trading_bot.config import TICKER, INTERVAL
 
 logger = logging.getLogger(__name__)
+
+
+def fetch_direct() -> Optional[pd.DataFrame]:
+    """Upbit REST API(15분봉)로 데이터를 가져오는 백업 함수."""
+    try:
+        unit = INTERVAL.replace("minute", "")
+        url = f"https://api.upbit.com/v1/candles/minutes/{unit}"
+        resp = requests.get(url, params={"market": TICKER, "count": 100}, timeout=5)
+        resp.raise_for_status()
+        data = resp.json()[::-1]
+        df = pd.DataFrame(data).rename(columns={
+            "opening_price": "open",
+            "high_price": "high",
+            "low_price": "low",
+            "trade_price": "close",
+            "candle_acc_trade_volume": "volume",
+        })
+        df.index = pd.to_datetime(df["candle_date_time_kst"], errors="coerce")
+        return df[["open", "high", "low", "close", "volume"]]
+    except Exception:
+        logger.exception("fetch_direct() 실패")
+        return None
+
+
+def safe_ohlcv() -> Optional[pd.DataFrame]:
+    """pyupbit.get_ohlcv() 실패 시 fetch_direct()로 백업."""
+    try:
+        df = pyupbit.get_ohlcv(TICKER, count=100, interval=INTERVAL)
+        if df is None or df.empty:
+            raise RuntimeError("pyupbit.get_ohlcv 빈 데이터")
+        return df
+    except Exception:
+        logger.warning("pyupbit.get_ohlcv 에러 발생, fetch_direct 시도")
+        return fetch_direct()
+
+
+def fetch_ohlcv_1h_via_rest(ticker: str, count: int = 100) -> Optional[pd.DataFrame]:
+    """Upbit REST API(1시간봉)로 데이터를 가져오는 백업 함수."""
+    try:
+        url = "https://api.upbit.com/v1/candles/minutes/60"
+        resp = requests.get(url, params={"market": ticker, "count": count}, timeout=5)
+        resp.raise_for_status()
+        data = resp.json()[::-1]
+        df = pd.DataFrame(data).rename(columns={
+            "opening_price": "open",
+            "high_price": "high",
+            "low_price": "low",
+            "trade_price": "close",
+            "candle_acc_trade_volume": "volume",
+        })
+        df.index = pd.to_datetime(df["candle_date_time_kst"], errors="coerce")
+        return df[["open", "high", "low", "close", "volume"]]
+    except Exception:
+        logger.exception("fetch_ohlcv_1h_via_rest() 실패")
+        return None
 
 def fetch_data_15m() -> Optional[pd.DataFrame]:
     """
