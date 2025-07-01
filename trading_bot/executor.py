@@ -93,12 +93,16 @@ def execute_trade(
                 else:
                     ctx.krw += value
                     ctx.btc -= qty
+                    if ctx.btc == 0:
+                        ctx.avg_price = 0.0
                 pct_used = 100.0
 
         # 실제 모드 주문 후 잔고 재동기화
         if LIVE_MODE and executed:
             new_krw, new_btc, new_avg = sync_account_upbit()
             ctx.krw, ctx.btc, ctx.avg_price = new_krw, new_btc, new_avg
+            if ctx.btc == 0:
+                ctx.avg_price = 0.0
         elif executed:
             save_account(ctx.krw, ctx.btc, ctx.avg_price)
 
