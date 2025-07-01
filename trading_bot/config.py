@@ -39,8 +39,11 @@ MIN_ORDER_KRW = int(os.getenv("MIN_ORDER_KRW", "5000"))
 
 ACCESS_KEY = os.getenv("UPBIT_ACCESS_KEY", "").strip()
 SECRET_KEY = os.getenv("UPBIT_SECRET_KEY", "").strip()
+# Enable live trading only when the flag is "true" and both API keys are provided
 LIVE_MODE = (
-    os.getenv("LIVE_MODE", "false").lower() == "true" and ACCESS_KEY and SECRET_KEY
+    os.getenv("LIVE_MODE", "false").lower() == "true"
+    and bool(ACCESS_KEY)
+    and bool(SECRET_KEY)
 )
 
 DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK_URL", "").strip()
