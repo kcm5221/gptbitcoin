@@ -22,6 +22,10 @@ from trading_bot.config import (
 logger = logging.getLogger(__name__)
 OPENAI_KEY = os.getenv("OPENAI_API_KEY", "")
 client = OpenAI(api_key=OPENAI_KEY) if OPENAI_KEY else None
+if client is None:
+    logger.warning(
+        "OPENAI_API_KEY not set; AI features disabled (returns 'hold')"
+    )
 
 
 # ──────────────────────────────────────────────
