@@ -226,6 +226,14 @@ gptbitcoin/
       `REFLECTION_RECURSIVE=false`로 설정하면 첫 응답만 사용합니다.
 
 
+## ❓ 문제 해결 (Troubleshooting)
+
+* **AI 보조 패턴이 항상 'hold'만 반환되는 경우**
+  * `OPENAI_API_KEY` 환경 변수가 비어 있거나 잘못되면 `ask_pattern_decision()` 함수가 항상 "hold"를 반환합니다.
+* **거래가 발생하지 않는 경우**
+  * 1시간봉 SMA50 필터에 걸리면 신호가 무시됩니다.
+  * 최근 5봉 거래량이 급감하면 노이즈 감지 로직이 패턴 검사를 중지시킬 수 있습니다.
+
 ## 🛡️ 보안 주의 사항
 
 - `.env` 파일에는 API 키를 절대 공개 저장소에 커밋하지 마세요.
