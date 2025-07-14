@@ -1,0 +1,40 @@
+# ── 가상환경
+venv/
+
+# ── 환경변수
+.env
+.env.*
+
+# 예외: sample 파일은 버전 관리
+!.env.sample
+
+# ── 런타임 파일
+ohlcv_cache.json
+
+# ── data
+data/*
+!data/trading.db
+
+# ── 로그
+logs/
+
+# ── 파이썬 바이트코드 / 캐시
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ── IDE 설정
+.vscode/
+.idea/
+
+# ── 편집기 백업/스왑
+*~
+*.bak
+*.swp
+
+# ── macOS
+.DS_Store
+
+# ── 테스트 / 커버리지
+.pytest_cache/
+.coverage
