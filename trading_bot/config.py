@@ -1,13 +1,13 @@
 # trading_bot/config.py
 
 from dotenv import load_dotenv
+from pathlib import Path
 
-# 환경 변수는 .env 파일에서 로드합니다
-
-load_dotenv(".env")
+# 환경 변수는 저장소 루트의 .env 파일에서 로드합니다
+ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(ENV_PATH)
 
 import os
-from pathlib import Path
 
 # ──────────────────────────────────────────────────────────────────────
 # 프로젝트 기본 경로 및 환경 변수 로드

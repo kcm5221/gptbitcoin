@@ -87,6 +87,9 @@ gptbitcoin/
 
     > ⚠️ **주의:** `.env` 파일에 민감한 API 키를 절대 공개 저장소에 커밋하지 마세요.
 
+    `trading_bot.config` 모듈이 저장소 루트의 `.env` 파일을 자동으로 로드하므로
+    크론 작업에서 작업 디렉터리를 별도로 변경할 필요가 없습니다.
+
 4. **데이터베이스 & 캐시 초기화**
 
     - 첫 실행 시 `trading_bot/config.py` 에서 지정한 경로(기본 `trading_bot/data/trading.db`)에 DB 파일이 자동 생성됩니다.
@@ -118,8 +121,8 @@ gptbitcoin/
          #!/usr/bin/env bash
          set -euo pipefail
 
-         # 1) 리포지토리 최신화
-         cd /home/ubuntu/gptbitcoin
+        # 1) (선택) 리포지토리 최신화
+        cd /home/ubuntu/gptbitcoin  # .env 로드를 위한 작업 디렉터리 변경은 필요 없음
 
          # 2) 가상환경 활성화
          source /home/ubuntu/gptbitcoin/venv/bin/activate
