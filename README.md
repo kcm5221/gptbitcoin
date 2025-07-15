@@ -152,6 +152,15 @@ gptbitcoin/
        - 위 예시에서는 `deploy_and_run.sh --mode intraday`를 15분 간격으로 실행하며,
          표준 출력/오류는 `trading_bot/logs/cron.log`에 기록됩니다.
 
+## 🧪 테스트 실행
+
+가상환경을 활성화한 뒤 프로젝트 루트에서 다음 명령으로 단위 테스트를 실행할 수 있습니다.
+
+```bash
+python3 -m pytest -q
+```
+
+`-q` 옵션은 테스트 결과를 간결하게 출력합니다.
 ---
 
 ## ⚙️ 주요 기능 설명
