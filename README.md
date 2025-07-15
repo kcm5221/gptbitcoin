@@ -131,9 +131,9 @@ gptbitcoin/
          pip install --upgrade pip
          pip install -r requirements.txt
 
-         # 4) 자동매매 스크립트 실행 (인트라데이 모드) & 로그를 cron.log에 덧붙이기
-         python3 -m trading_bot.main --mode intraday \
-             >> /home/ubuntu/gptbitcoin/logs/cron.log 2>&1
+        # 4) 자동매매 스크립트 실행 (인트라데이 모드) & 로그를 trading_bot/logs/cron.log에 덧붙이기
+        python3 -m trading_bot.main --mode intraday \
+            >> /home/ubuntu/gptbitcoin/trading_bot/logs/cron.log 2>&1
          ```
        
        ⏰ **스케줄링 예시 (cron)**  
@@ -149,8 +149,8 @@ gptbitcoin/
        # ──────────────────────────────────────────────────
        ```
 
-       - 위 예시에서는 `deploy_and_run.sh --mode intraday`를 15분 간격으로 실행하며,  
-         표준 출력/오류는 `logs/cron.log`에 기록됩니다.
+       - 위 예시에서는 `deploy_and_run.sh --mode intraday`를 15분 간격으로 실행하며,
+         표준 출력/오류는 `trading_bot/logs/cron.log`에 기록됩니다.
 
 ---
 
