@@ -454,7 +454,7 @@ def ask_pattern_decision(pattern_name: str, recent_data: pd.DataFrame) -> str:
     key = ("pattern_decision", pattern_name, _df_hashable_key(recent_data, rows=10))
     cached = _pattern_decision_cache.get(key)
     if cached is not None:
-        logger.debug(f"캐시된 결정 재사용: {cached}")
+        logger.info(f"ask_pattern_decision cache hit: {cached}")
         return cached
 
     df_for_ai = (
