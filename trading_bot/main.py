@@ -32,6 +32,7 @@ from trading_bot.db_helpers import (
     prune_old_logs,
 )
 from trading_bot.utils import get_fear_and_greed
+import trading_bot.config as cfg
 from trading_bot.config import (
     LIVE_MODE,
     TICKER,
@@ -56,6 +57,8 @@ logging.basicConfig(
         logging.StreamHandler(),
     ],
 )
+
+cfg.log_env_info()
 
 logger = logging.getLogger(__name__)
 

@@ -445,12 +445,16 @@ def ask_pattern_decision(pattern_name: str, recent_data: pd.DataFrame) -> str:
     - 패턴 이름 + 최근 10봉 상황이 동일하면 5분간 캐시된 결정 재사용
     - 패턴 히스토리가 빈 상태일 때 유연한 힌트 제공
     """
+    logger.info(f"ask_pattern_decision 호출: pattern='{pattern_name}'")
+
     if client is None:
+        logger.info("OpenAI client 없음 → 'hold' 반환")
         return "hold"
 
     key = ("pattern_decision", pattern_name, _df_hashable_key(recent_data, rows=10))
     cached = _pattern_decision_cache.get(key)
     if cached is not None:
+        logger.debug(f"캐시된 결정 재사용: {cached}")
         return cached
 
     df_for_ai = (
@@ -511,6 +515,7 @@ def ask_pattern_decision(pattern_name: str, recent_data: pd.DataFrame) -> str:
         else:
             decision = "hold"
         _pattern_decision_cache.set(key, decision)
+        logger.info(f"ask_pattern_decision 결과: {decision}")
         return decision
     except Exception:
         logger.exception("ask_pattern_decision() 호출 중 예외 발생")
