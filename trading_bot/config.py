@@ -2,10 +2,19 @@
 
 from dotenv import load_dotenv
 from pathlib import Path
+import logging
 
 # 환경 변수는 저장소 루트의 .env 파일에서 로드합니다
 ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(ENV_PATH)
+
+logger = logging.getLogger(__name__)
+
+def log_env_info() -> None:
+    """Log .env path and OPENAI_API_KEY value for debugging."""
+    logger.info(
+        f".env 경로: {ENV_PATH}, OPENAI_API_KEY={os.getenv('OPENAI_API_KEY')}"
+    )
 
 import os
 
