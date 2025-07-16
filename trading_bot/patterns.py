@@ -184,11 +184,17 @@ def check_ai_patterns(ctx) -> Tuple[bool, bool, str]:
         logger.info(f"check_ai_patterns: '{detected}' 과거 히스토리 없음")
 
     # 6) AI에게 매매 결정 요청
+    df10 = df.iloc[-10:][["open", "high", "low", "close", "volume"]]
+    logger.debug(
+        f"check_ai_patterns: ask_pattern_decision 직전 최근 10봉:\n{df10.to_string(index=True)}"
+    )
     try:
         decision = ask_pattern_decision(detected, df)
     except Exception:
         logger.exception("check_ai_patterns: ask_pattern_decision 호출 중 예외 발생 → 관망 처리")
         return False, False, detected
+
+    logger.debug(f"check_ai_patterns: ask_pattern_decision 직후 결정='{decision}'")
 
     logger.info(f"check_ai_patterns: AI 매매 결정 → {decision}")
 
