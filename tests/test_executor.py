@@ -1,7 +1,8 @@
+import os, sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
-import sys
 
 # Provide dummy pyupbit module if missing
 if 'pyupbit' not in sys.modules:
