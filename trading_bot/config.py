@@ -3,6 +3,7 @@
 from dotenv import load_dotenv
 from pathlib import Path
 import logging
+import os
 
 # 환경 변수는 저장소 루트의 .env 파일에서 로드합니다
 ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
@@ -11,12 +12,15 @@ load_dotenv(ENV_PATH)
 logger = logging.getLogger(__name__)
 
 def log_env_info() -> None:
-    """Log .env path and OPENAI_API_KEY value for debugging."""
-    logger.info(
-        f".env 경로: {ENV_PATH}, OPENAI_API_KEY={os.getenv('OPENAI_API_KEY')}"
-    )
-
-import os
+    """Log .env path and masked OPENAI_API_KEY for debugging."""
+    key = os.getenv("OPENAI_API_KEY", "")
+    if key:
+        masked = (
+            f"{key[:4]}...{key[-4:]}" if len(key) > 8 else key[:1] + "***" + key[-1:]
+        )
+    else:
+        masked = "(empty)"
+    logger.info(f".env 경로: {ENV_PATH}, OPENAI_API_KEY={masked}")
 
 # ──────────────────────────────────────────────────────────────────────
 # 프로젝트 기본 경로 및 환경 변수 로드
